@@ -58,8 +58,8 @@ def _sparkline(data, width=10):
     return "".join(SPARK_CHARS[min(int((v - mn) / rng * 7), 7)] for v in sampled)
 
 def _gemini_advice(asset_name, symbol, analysis, news_text=""):
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_KEY)
+    from google import genai
+    client = genai.Client(api_key=GEMINI_KEY)
     i = analysis["indicators"]
     signal = analysis["signal"]
     conf = analysis["confidence"]
@@ -75,26 +75,25 @@ def _gemini_advice(asset_name, symbol, analysis, news_text=""):
         f"Termina con: DISCLAIMER: progetto educativo."
     )
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        resp = model.generate_content(prompt, generation_config={"max_output_tokens": 512, "temperature": 0.7})
+        resp = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
         return resp.text
     except Exception as e:
         return f"{verdict} (conf: {conf}%) | {asset_name} a ${i['price']}, trend {i['trend']}. DISCLAIMER: progetto educativo"
 
 def _gemini_chat(message, history=None):
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_KEY)
-    system = "Sei un assistente AI utile, esperto in finanza ed economia. Rispondi in modo diretto e conciso, senza presentarti ogni volta. Parla italiano."
-    messages = [{"role": "user", "parts": [system + "\n\n" + message]}]
+    from google import genai
+    client = genai.Client(api_key=GEMINI_KEY)
+    prompt = "Sei un assistente AI utile, esperto in finanza ed economia. Rispondi in modo diretto e conciso, senza presentarti ogni volta. Parla italiano.\n\n"
     if history:
         ctx = "\n".join(f"{h['role']}: {h['msg']}" for h in history[-6:])
-        messages[0]["parts"][0] = system + "\n\n" + ctx + "\n\nuser: " + message
+        prompt += ctx + "\n\n"
+    user_msg = f"user: {message}"
+    prompt += user_msg
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        resp = model.generate_content(messages[0]["parts"][0], generation_config={"max_output_tokens": 512, "temperature": 0.7})
+        resp = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
         return resp.text
-    except:
-        return "Non riesco a contattare l'AI. Riprova."
+    except Exception as e:
+        return f"Errore AI: {str(e)[:100]}"
 
 if GEMINI_KEY:
     USE_GEMINI = True
