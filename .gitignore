@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+bot/token.txt
+bot/config.json
+*.keras
+charts/
+models/saved/
+portfolio.json
+.DS_Store
+*.log
