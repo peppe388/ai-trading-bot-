@@ -216,13 +216,24 @@ async def start(update, context):
         _add_user(uid)
         await update.message.reply_text(
             "✅ Sei l'admin. Bot avviato.\n"
-            f"`/aggiungi <ID>` - Aggiungi un utente\n"
-            f"`/rimuovi <ID>` - Rimuovi un utente\n"
+            f"`/aggiungi <ID>` - Aggiungi utente\n"
+            f"`/rimuovi <ID>` - Rimuovi utente\n"
             f"`/lista` - Asset disponibili\n"
-            f"`/analizza <nome>` - Analisi\n"
+            f"`/prezzo <nome>` - Prezzo in tempo reale\n"
+            f"`/grafico <nome>` - Grafico candlestick\n"
+            f"`/analizza <nome>` - Analisi completa\n"
+            f"`/confronta <a1> <a2>` - Confronto due asset\n"
+            f"`/backtest <nome>` - Backtest 2 anni\n"
+            f"`/top` - I migliori\n"
+            f"`/flop` - I peggiori\n"
+            f"`/riepilogo` - Riepilogo mercati\n"
+            f"`/avvisa <nome> <prezzo>` - Allerta prezzo\n"
+            f"`/avvisi` - Lista alert\n"
+            f"`/disattiva <id>` - Rimuovi alert\n"
             f"`/notizie` - Ultime notizie\n"
             f"`/notizie <nome>` - Notizie su un asset\n"
-            f"`/chat <msg>` - Parla con l'AI"
+            f"`/chat <msg>` - Parla con l'AI\n"
+            f"`/status` - Stato del bot"
         )
     else:
         await update.message.reply_text(
