@@ -1,4 +1,5 @@
 import os, sys, json, logging, threading, sqlite3
+from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,10 +58,15 @@ def _esc(text):
 
 _load_auth()
 
-from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name
+from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name, get_current_price
 from data.indicators import add_indicators, get_latest_indicators
 from advisor.analyser import analyse
+from data.chart import create_chart, create_comparison, CHART_ENABLED
+from data.alerts import add_alert, remove_alert, get_user_alerts, start_checker
+from advisor.backtest import run_backtest, format_backtest
 from config import FOREX_PAIRS, STOCKS, COMMODITIES, CRYPTO
+
+START_TIME = datetime.now()
 
 ALL_ASSETS = list(FOREX_PAIRS.items()) + list(STOCKS.items()) + list(COMMODITIES.items()) + list(CRYPTO.items())
 
@@ -249,6 +255,234 @@ async def rimuovi(update, context):
     await update.message.reply_text(f"🗑️ Utente `{target}` rimosso.")
 
 @authorized
+async def prezzo(update, context):
+    if not context.args:
+        await update.message.reply_text("Usa: `/prezzo oro` o `/prezzo BTC`", parse_mode="Markdown")
+        return
+    try:
+        label, symbol = resolve_symbol(" ".join(context.args))
+    except:
+        await update.message.reply_text("❌ Asset non trovato.")
+        return
+    await update.message.reply_text(f"🔍 Cerco {_esc(label)}...")
+    try:
+        df = fetch_data(symbol, 5)
+        price = float(df["Close"].iloc[-1])
+        prev = float(df["Close"].iloc[-2]) if len(df) > 1 else price
+        high = float(df["High"].max())
+        low = float(df["Low"].min())
+        chg = (price / prev - 1) * 100
+        arrow = "📈" if chg > 0 else "📉" if chg < 0 else "➡️"
+        await update.message.reply_text(
+            f"*{_esc(label)}* {arrow} ${price:.2f} ({chg:+.2f}%)\n"
+            f"📊 Max: ${high:.2f}  Min: ${low:.2f}",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Errore: {str(e)[:150]}")
+
+@authorized
+async def status_cmd(update, context):
+    uptime = datetime.now() - START_TIME
+    d, rem = divmod(int(uptime.total_seconds()), 86400)
+    h, rem = divmod(rem, 3600)
+    m, _ = divmod(rem, 60)
+    uptime_str = f"{d}g {h}h {m}m"
+    lines = [
+        "🤖 *Stato Bot*",
+        f"📅 Uptime: {uptime_str}",
+        f"👥 Utenti autorizzati: {len(AUTHORIZED_USERS)}",
+        f"📡 AI: {'Groq' if USE_GROQ else 'Ollama'}",
+        f"📊 Asset: {len(ALL_ASSETS)}",
+        f"📈 Grafici: {'✅' if CHART_ENABLED else '❌'} (mplfinance)",
+        f"🎯 Alert: attivo",
+    ]
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+@authorized
+async def top_flop(update, context):
+    cmd = update.message.text.split()[0].lower()
+    is_top = cmd == "/top"
+    msg = await update.message.reply_text("⏳ Calcolo performance...")
+    results = []
+    for name, sym in ALL_ASSETS:
+        try:
+            df = fetch_data(sym, 10)
+            if len(df) >= 3:
+                chg = (float(df["Close"].iloc[-1]) / float(df["Close"].iloc[0]) - 1) * 100
+                results.append((chg, name))
+        except:
+            pass
+    results.sort(reverse=True)
+    items = results[:5] if is_top else results[-5:]
+    label = "🏆 *TOP 5*" if is_top else "🍂 *FLOP 5*"
+    lines = [f"{label} performance:\n"]
+    for chg, name in items:
+        arrow = "📈" if chg > 0 else "📉"
+        lines.append(f"{arrow} `{_esc(name)}`: {chg:+.2f}%")
+    await msg.edit_text("\n".join(lines), parse_mode="Markdown")
+
+@authorized
+async def confronta(update, context):
+    args = context.args
+    if not args or len(args) < 2:
+        await update.message.reply_text("Usa: `/confronta oro bitcoin`", parse_mode="Markdown")
+        return
+    try:
+        l1, s1 = resolve_symbol(args[0])
+        l2, s2 = resolve_symbol(args[1])
+    except:
+        await update.message.reply_text("❌ Asset non trovato.")
+        return
+    await update.message.reply_text(f"⏳ Confronto {_esc(l1)} vs {_esc(l2)}...")
+    try:
+        df1 = fetch_data(s1, 30)
+        df2 = fetch_data(s2, 30)
+        r1 = (float(df1["Close"].iloc[-1]) / float(df1["Close"].iloc[0]) - 1) * 100
+        r2 = (float(df2["Close"].iloc[-1]) / float(df2["Close"].iloc[0]) - 1) * 100
+        v1 = float(df1["Close"].pct_change().std() * (252 ** 0.5) * 100)
+        v2 = float(df2["Close"].pct_change().std() * (252 ** 0.5) * 100)
+        t1 = float(df1["Close"].iloc[-1])
+        t2 = float(df2["Close"].iloc[-1])
+        lines = [
+            f"📊 *Confronto 30gg:*",
+            f"",
+            f"*{_esc(l1)}* vs *{_esc(l2)}*",
+            f"💰 ${t1:.2f}  vs  ${t2:.2f}",
+            f"📈 Rendimento: {r1:+.2f}% {'📈' if r1>r2 else '📉'} {r2:+.2f}%",
+            f"📊 Volatilità: {v1:.1f}%  vs  {v2:.1f}%",
+            f"🔀 Correlazione: {float(df1['Close'].corr(df2['Close'])):.2f}",
+        ]
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        chart = create_comparison(s1, s2, l1, l2, 60)
+        if chart:
+            with open(chart, "rb") as f:
+                await update.message.reply_photo(f)
+            os.unlink(chart)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Errore confronto: {str(e)[:200]}")
+
+@authorized
+async def backtest_cmd(update, context):
+    if not context.args:
+        await update.message.reply_text("Usa: `/backtest NVDA` o `/backtest oro`", parse_mode="Markdown")
+        return
+    try:
+        label, symbol = resolve_symbol(" ".join(context.args))
+    except:
+        await update.message.reply_text("❌ Asset non trovato.")
+        return
+    await update.message.reply_text(f"⏳ Backtest {_esc(label)} su 2 anni...")
+    try:
+        result = run_backtest(symbol, 2)
+        await update.message.reply_text(f"📊 *Backtest {_esc(label)}*\n```\n{format_backtest(result)}\n```", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Errore backtest: {str(e)[:200]}")
+
+@authorized
+async def grafico(update, context):
+    if not context.args:
+        await update.message.reply_text("Usa: `/grafico oro` o `/grafico BTC`", parse_mode="Markdown")
+        return
+    if not CHART_ENABLED:
+        await update.message.reply_text("❌ Grafici non disponibili (mplfinance non installato).")
+        return
+    try:
+        label, symbol = resolve_symbol(" ".join(context.args))
+    except:
+        await update.message.reply_text("❌ Asset non trovato.")
+        return
+    await update.message.reply_text(f"📈 Genero grafico per {_esc(label)}...")
+    chart = create_chart(symbol, label, 90)
+    if not chart:
+        await update.message.reply_text("❌ Impossibile generare il grafico.")
+        return
+    df = fetch_data(symbol, 5)
+    price = float(df["Close"].iloc[-1]) if not df.empty else 0
+    with open(chart, "rb") as f:
+        await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${price:.2f}")
+    os.unlink(chart)
+
+@authorized
+async def avvisa(update, context):
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text("Usa: `/avvisa oro 210`", parse_mode="Markdown")
+        return
+    target = context.args[-1]
+    asset_text = " ".join(context.args[:-1])
+    if not target.replace(".", "").isdigit():
+        await update.message.reply_text("Il prezzo target non è valido.")
+        return
+    try:
+        label, symbol = resolve_symbol(asset_text)
+    except:
+        await update.message.reply_text("❌ Asset non trovato.")
+        return
+    target_price = float(target)
+    aid = add_alert(update.effective_user.id, symbol, label, target_price, update.effective_chat.id)
+    await update.message.reply_text(
+        f"🔔 Alert #{aid} creato!\n{_esc(label)} ti avviserò quando supera ${target_price:.2f}"
+    )
+
+@authorized
+async def avvisi(update, context):
+    alerts = get_user_alerts(update.effective_user.id)
+    if not alerts:
+        await update.message.reply_text("Nessun alert attivo.")
+        return
+    lines = ["🔔 *I tuoi alert:*\n"]
+    for a in alerts:
+        lines.append(f"`#{a['id']}` — {_esc(a['label'])} > ${a['target_price']:.2f}")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+@authorized
+async def disattiva(update, context):
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Usa: `/disattiva <ID>` — `/avvisi` per vedere gli ID", parse_mode="Markdown")
+        return
+    aid = int(context.args[0])
+    if remove_alert(aid, update.effective_user.id):
+        await update.message.reply_text(f"🗑️ Alert #{aid} disattivato.")
+    else:
+        await update.message.reply_text(f"❌ Alert #{aid} non trovato o non tuo.")
+
+@authorized
+async def riepilogo(update, context):
+    await update.message.reply_text("⏳ Genero riepilogo mercati...")
+    sample = list(STOCKS.items())[:5] + list(COMMODITIES.items()) + list(CRYPTO.items())[:2] + list(FOREX_PAIRS.items())[:2]
+    results = []
+    for name, sym in sample:
+        try:
+            df = fetch_data(sym, 5)
+            if len(df) >= 2:
+                chg = (float(df["Close"].iloc[-1]) / float(df["Close"].iloc[-2]) - 1) * 100
+                price = float(df["Close"].iloc[-1])
+                results.append((name, price, chg))
+        except:
+            pass
+    lines = ["📊 *Riepilogo Mercati:*\n"]
+    for name, price, chg in results:
+        arrow = "📈" if chg > 0 else "📉"
+        lines.append(f"{arrow} `{_esc(name)}`: ${price:.2f} ({chg:+.2f}%)")
+    lines.append("\n🧠 *Commento AI...*")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    summary = "\n".join(f"{n}: {c:+.2f}%" for n, _, c in results)
+    if USE_GROQ:
+        try:
+            from groq import Groq
+            client = Groq(api_key=GROQ_KEY)
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": f"Sei un analista. Riassumi il mercato in 3 righe in italiano basandoti su queste performance:\n{summary}"}],
+                temperature=0.5, max_tokens=256,
+            )
+            await update.message.reply_text(f"🧠 *Analisi:*\n{resp.choices[0].message.content}")
+        except Exception as e:
+            await update.message.reply_text(f"❌ AI non disponibile: {str(e)[:100]}")
+    else:
+        await update.message.reply_text("❌ AI non configurata (manca GROQ_API_KEY)")
+
+@authorized
 async def lista(update, context):
     await update.message.reply_text(format_asset_list(), parse_mode="Markdown")
 
@@ -305,6 +539,12 @@ async def analizza(update, context):
         ]
         await status_msg.edit_text("\n".join(filter(None, lines)), parse_mode="Markdown")
         news = get_news_text(symbol)
+        if CHART_ENABLED:
+            chart = create_chart(symbol, label, 90)
+            if chart:
+                with open(chart, "rb") as f:
+                    await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${ind['price']:.2f}")
+                os.unlink(chart)
         final_msg = await update.message.reply_text(f"⏳ Consulto AI per verdetto finale...")
         advice = get_advice(label, symbol, analysis, news)
         await final_msg.edit_text(f"🧠 Verdetto AI:\n{advice}")
@@ -377,6 +617,17 @@ def start_bot():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("aggiungi", aggiungi))
     app.add_handler(CommandHandler("rimuovi", rimuovi))
+    app.add_handler(CommandHandler("prezzo", prezzo))
+    app.add_handler(CommandHandler("status", status_cmd))
+    app.add_handler(CommandHandler("top", top_flop))
+    app.add_handler(CommandHandler("flop", top_flop))
+    app.add_handler(CommandHandler("confronta", confronta))
+    app.add_handler(CommandHandler("backtest", backtest_cmd))
+    app.add_handler(CommandHandler("grafico", grafico))
+    app.add_handler(CommandHandler("avvisa", avvisa))
+    app.add_handler(CommandHandler("avvisi", avvisi))
+    app.add_handler(CommandHandler("disattiva", disattiva))
+    app.add_handler(CommandHandler("riepilogo", riepilogo))
     app.add_handler(CommandHandler("lista", lista))
     app.add_handler(CommandHandler("notizie", notizie_cmd))
     app.add_handler(CommandHandler("analizza", analizza))
@@ -384,6 +635,7 @@ def start_bot():
     app.add_handler(CommandHandler("stop", stop_cmd))
     app.add_handler(CommandHandler("esci", stop_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    start_checker(app)
     mode = "Groq-Llama3.3" if USE_GROQ else "Ollama"
     print(f" Telegram Bot avviato su @oracle_fx_bot (AI: {mode})")
     app.run_polling(drop_pending_updates=True)
