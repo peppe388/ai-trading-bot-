@@ -668,7 +668,16 @@ async def reload_cmd(update, context):
     _live_streams.clear()
     AUTHORIZED_USERS.clear()
     _load_auth()
-    await update.message.reply_text("🔄 Bot ricaricato. Sessione pulita.")
+    msg = await update.message.reply_text("🔄 Ricarico...", parse_mode="Markdown")
+    await asyncio.sleep(0.5)
+    try:
+        await update.message.delete()
+    except:
+        pass
+    try:
+        await msg.delete()
+    except:
+        pass
 
 async def nukebomb(update, context):
     global _nuke_armed
