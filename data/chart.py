@@ -4,9 +4,9 @@ from data.market import fetch_data
 
 CHART_ENABLED = False
 try:
-    import mplfinance as mpf
     import matplotlib
     matplotlib.use('Agg')
+    import mplfinance as mpf
     import matplotlib.pyplot as plt
     CHART_ENABLED = True
 except:

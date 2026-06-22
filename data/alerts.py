@@ -40,6 +40,11 @@ def get_all_alerts():
     return rows
 
 def start_checker(app):
+    async def _notify(chat_id, text):
+        try:
+            await app.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+        except:
+            pass
     def _check():
         while True:
             try:
@@ -48,11 +53,8 @@ def start_checker(app):
                     try:
                         price = get_current_price(row['symbol'])
                         if price and price >= row['target_price']:
-                            app.bot.send_message(
-                                chat_id=row['chat_id'],
-                                text=f" Alert attivato!\n{row['label']} ha raggiunto ${price:.2f} (target: ${row['target_price']:.2f})",
-                                parse_mode="Markdown"
-                            )
+                            text = f" Alert attivato!\n{row['label']} ha raggiunto ${price:.2f} (target: ${row['target_price']:.2f})"
+                            app.create_task(_notify(row['chat_id'], text))
                             remove_alert(row['id'], row['user_id'])
                     except:
                         pass
