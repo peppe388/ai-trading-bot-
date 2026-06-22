@@ -91,35 +91,36 @@ def create_comparison(sym1, sym2, label1, label2, days=90):
 def create_live_chart(symbol, label):
     if not CHART_ENABLED:
         return None
-    try:
-        df = yf.download(symbol, period="5d", interval="15m", progress=False)
-        if df.empty or len(df) < 10:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [c[0] for c in df.columns]
-    except:
+    plot_df = None
+    tried = ""
+    for period, interval in [("1d", "1m"), ("5d", "15m")]:
+        try:
+            df = yf.download(symbol, period=period, interval=interval, progress=False)
+            if df.empty or len(df) < 5:
+                continue
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [c[0] for c in df.columns]
+            plot_df = df.tail(30).copy()
+            tried = interval
+            break
+        except:
+            continue
+    if plot_df is None:
         return None
-    plot_df = df.tail(40).copy()
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
     try:
-        mc = mpf.make_marketcolors(
-            up=GREEN, down=RED,
-            edge='inherit', wick='inherit', volume=DARK_GRID
-        )
+        mc = mpf.make_marketcolors(up=GREEN, down=RED, edge='inherit', wick='inherit', volume=DARK_GRID)
         style = mpf.make_mpf_style(
-            marketcolors=mc,
-            figcolor=DARK_BG, facecolor=DARK_BG,
+            marketcolors=mc, figcolor=DARK_BG, facecolor=DARK_BG,
             gridcolor=DARK_GRID, gridstyle=':',
             rc={'font.size': 8, 'axes.labelcolor': 'white',
                 'axes.edgecolor': '#555', 'xtick.color': 'white',
                 'ytick.color': 'white'}
         )
-        mpf.plot(
-            plot_df, type='candle', style=style,
-            volume=False, title=label, ylabel='$',
-            savefig=dict(fname=tmp.name, dpi=120, facecolor=DARK_BG),
-            figsize=(9, 4), tight_layout=True,
-        )
+        mpf.plot(plot_df, type='candle', style=style, volume=False,
+                 title=f'{label} ({tried})', ylabel='$',
+                 savefig=dict(fname=tmp.name, dpi=120, facecolor=DARK_BG),
+                 figsize=(9, 4), tight_layout=True)
         return tmp.name
     except:
         try: os.unlink(tmp.name)

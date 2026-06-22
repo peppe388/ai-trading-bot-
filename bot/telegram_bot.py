@@ -428,20 +428,19 @@ async def live(update, context):
     except:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — 3 minuti (dati intraday 15min)...")
+    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — si aggiorna ogni 10s per 2 minuti...")
     photo_msg = None
-    for i in range(6):
+    for i in range(12):
         try:
-            chart = create_live_chart(symbol, f"{label} #{i+1}")
+            chart = create_live_chart(symbol, f"{label}")
             if not chart:
                 await msg.edit_text(f"❌ Errore grafico #{i+1}, passo a daily...")
-                chart = create_chart(symbol, f"{label} #{i+1}", 90)
+                chart = create_chart(symbol, f"{label}", 90)
                 if not chart:
                     await msg.edit_text(f"❌ Errore grafico #{i+1}")
                     break
-            df = fetch_data(symbol, 2)
-            price = float(df["Close"].iloc[-1]) if not df.empty else 0
-            caption = f"📊 {_esc(label)} — Live #{i+1}/6 — ${price:.2f}"
+            price = get_current_price(symbol) or 0
+            caption = f"📊 {_esc(label)} — Live {i+1}/12 — ${price:.2f}"
             if photo_msg:
                 await photo_msg.delete()
             with open(chart, "rb") as f:
@@ -450,8 +449,8 @@ async def live(update, context):
                 )
             try: os.unlink(chart)
             except: pass
-            if i < 5:
-                await asyncio.sleep(30)
+            if i < 11:
+                await asyncio.sleep(10)
         except Exception as e:
             await update.message.reply_text(f"❌ Live interrotto: {str(e)[:150]}")
             break
