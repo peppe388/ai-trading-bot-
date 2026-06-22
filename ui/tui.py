@@ -16,7 +16,7 @@ from advisor.analyser import analyse, record_prediction
 from advisor.reporter import get_advice, chat
 from advisor.chart import generate_chart
 from advisor.backtest import run_backtest, format_backtest
-from advisor.portfolio import Portfolio
+from data.market import get_news
 from advisor.vision import analyse_chart
 from advisor.alerter import Alerter
 from data.streamer import PriceStreamer
@@ -64,7 +64,6 @@ class TradingTUI:
         self.ollama_checked = False
         self.scan_done = False
         self.scan_progress = ""
-        self.portfolio = Portfolio()
         self.alerter = Alerter()
         self.streamer = PriceStreamer()
         self.backtest_result = None
@@ -199,9 +198,6 @@ class TradingTUI:
                 "accuracy": analysis["backtest_accuracy"], "news": news_text,
                 "ollama": ollama_reply,
             }
-            trade_msg = self.portfolio.auto_trade(label, sig, conf, i["price"])
-            if trade_msg:
-                self.alert_banner = trade_msg
             return analysis, label, yf_symbol, news_text
         except Exception as e:
             return {"error": str(e)}, label, yf_symbol, ""
@@ -221,7 +217,7 @@ class TradingTUI:
         t = []
         for i, (k, lb) in enumerate([
             ("dashboard", "Dashboard"), ("chat", "Chat"), ("assets", "Assets"),
-            ("backtest", "Backtest"), ("portfolio", "Portfolio")
+            ("backtest", "Backtest"), ("notizie", "Notizie")
         ], 1):
             s = "> " if self.tab == k else "  "
             st = "bold cyan" if self.tab == k else "dim white"
@@ -307,43 +303,18 @@ class TradingTUI:
         t.add_row("Capitale finale", f"${r['final_capital']:.2f}")
         return Panel(t, box=box.HEAVY, border_style="cyan", title="  BACKTEST  ", title_align="center")
 
-    def _make_portfolio_view(self):
-        prices = {sym: info.get("price", 0) for sym, info in self.asset_cache.items()}
-        s = self.portfolio.summary(prices)
-        t = Table(box=box.HEAVY, show_header=False, padding=(0, 2))
-        t.add_column("Metrica", style="bold cyan")
-        t.add_column("Valore")
-        ret_color = "green" if s["total_return"] >= 0 else "red"
-        t.add_row("Capitale iniziale", f"${self.portfolio.initial_capital:.2f}")
-        t.add_row("Investito", f"${s['invested']:.2f}")
-        t.add_row("Valore corrente", f"${s['current_value']:.2f}")
-        t.add_row("P&L chiuso", f"{'[green]' if s['closed_pnl'] >= 0 else '[red]'}${s['closed_pnl']:.2f}[/]")
-        t.add_row("Rendimento totale", f"[bold {ret_color}]{s['total_return']:+.2f}%[/]")
-        t.add_row("Posizioni aperte", str(s["num_positions"]))
-        t.add_row("Operazioni chiuse", str(s["num_trades"]))
-
-        pos_table = Table(box=box.SIMPLE, header_style="bold cyan")
-        pos_table.add_column("Asset", style="bold white")
-        pos_table.add_column("Qty", justify="right")
-        pos_table.add_column("Prezzo medio", justify="right")
-        pos_table.add_column("Prezzo attuale", justify="right")
-        pos_table.add_column("P&L", justify="right")
-        for sym, pos in self.portfolio.positions.items():
-            if pos["qty"] <= 0:
-                continue
-            cur = prices.get(sym, 0)
-            pnl = (cur - pos["avg_price"]) * pos["qty"]
-            info = self.asset_cache.get(sym, {})
-            label = info.get("label", sym)
-            pos_table.add_row(
-                label, f"{pos['qty']:.4f}", f"${pos['avg_price']:.4f}",
-                f"${cur:.4f}" if cur else "?",
-                f"[{'green' if pnl >= 0 else 'red'}]${pnl:.2f}[/]",
-            )
-
-        return Panel(Group(Text("PORTAFOGLIO — Riepilogo", style="bold white"), t,
-                           Text(""), Text("Posizioni aperte:", style="bold white"), pos_table),
-                     box=box.HEAVY, border_style="cyan")
+    def _make_news_view(self):
+        news_items = get_news("SPY", 12) or []
+        t = Table(box=box.HEAVY, show_header=False, padding=(0, 1), border_style="cyan")
+        for cat_name, sym in [("📈 Mercati", "SPY"), ("₿ Crypto", "BTC-USD"), ("🏅 Commodities", "GLD")]:
+            items = get_news(sym, 4) or []
+            if items:
+                t.add_row(f"[bold cyan]{cat_name}[/] ", "")
+                for n in items:
+                    t.add_row(f"  {n['title']}", f"[dim]{n.get('publisher', '')}[/]")
+        if not t.row_count:
+            return Panel("Nessuna notizia disponibile.", box=box.HEAVY, border_style="cyan")
+        return Panel(t, box=box.HEAVY, border_style="cyan")
 
     def _render_tab(self, tab):
         self.tab = tab
@@ -358,15 +329,15 @@ class TradingTUI:
             console.print(self._make_assets_view())
         elif tab == "backtest":
             console.print(self._make_backtest_view())
-        elif tab == "portfolio":
-            console.print(self._make_portfolio_view())
+        elif tab == "notizie":
+            console.print(self._make_news_view())
         console.print(self._make_footer())
 
     def _make_footer(self):
         return Panel(
             "[bold cyan][1][/] Dashboard  [bold cyan][2][/] Chat  [bold cyan][3][/] Assets  "
-            "[bold cyan][4][/] Backtest  [bold cyan][5][/] Portfolio  "
-            "[bold yellow]q[/]=quit  [bold yellow]h[/]=help  [bold yellow]r[/]=reset portfolio",
+            "[bold cyan][4][/] Backtest  [bold cyan][5][/] Notizie  "
+            "[bold yellow]q[/]=quit  [bold yellow]h[/]=help",
             style="dim white", box=box.SQUARE, padding=(0, 1),
         )
 
@@ -480,12 +451,7 @@ class TradingTUI:
                 self._render_tab("backtest")
                 continue
             if cmd == "5":
-                self._render_tab("portfolio")
-                continue
-            if cmd.lower() == "r":
-                self.portfolio.reset(10000)
-                self.alert_banner = "Portfolio resettato"
-                self._render_tab(self.tab)
+                self._render_tab("notizie")
                 continue
             if cmd == "h":
                 os.system("cls" if os.name == "nt" else "clear")
@@ -493,9 +459,8 @@ class TradingTUI:
                 console.print(Panel(
                     "[bold cyan]Comandi:[/]\n"
                     "  [bold]1[/] Dashboard    [bold]4[/] Backtest\n"
-                    "  [bold]2[/] Chat         [bold]5[/] Portfolio\n"
-                    "  [bold]3[/] Assets       [bold]r[/] Reset portfolio\n"
-                    "  [bold]q[/] Esci\n\n"
+                    "  [bold]2[/] Chat         [bold]5[/] Notizie\n"
+                    "  [bold]3[/] Assets       [bold]q[/] Esci\n\n"
                     "Oppure scrivi: EUR/USD, oro, TSLA per analisi\n"
                     "  o qualsiasi domanda per parlare con l'AI",
                     box=box.HEAVY, border_style="cyan"))

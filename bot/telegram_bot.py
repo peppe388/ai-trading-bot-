@@ -41,10 +41,9 @@ def _save_auth():
 
 _load_auth()
 
-from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name, get_current_price
+from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name
 from data.indicators import add_indicators, get_latest_indicators
 from advisor.analyser import analyse
-from advisor.portfolio import Portfolio
 from config import FOREX_PAIRS, STOCKS, COMMODITIES, CRYPTO
 
 ALL_ASSETS = list(FOREX_PAIRS.items()) + list(STOCKS.items()) + list(COMMODITIES.items()) + list(CRYPTO.items())
@@ -158,33 +157,15 @@ def format_asset_list():
         lines.append(f"*{cat}*\n{names}\n")
     return "\n".join(lines)
 
-def format_portfolio():
-    pf = Portfolio()
-    prices = {}
-    for _, sym in ALL_ASSETS:
-        try:
-            p = get_current_price(sym)
-            if p:
-                prices[sym] = p
-        except:
-            pass
-    s = pf.summary(prices)
-    lines = [f"📊 *Portafoglio Virtuale*"]
-    lines.append(f"💰 Capitale iniziale: ${pf.initial_capital:,.2f}")
-    lines.append(f"📈 Valore investito: ${s['invested']:,.2f}")
-    lines.append(f"💵 Valore corrente: ${s['current_value']:,.2f}")
-    lines.append(f"📉 Closed P&L: ${s['closed_pnl']:,.2f}")
-    lines.append(f"📊 *Rendimento totale: {s['total_return']:+.2f}%*")
-    lines.append(f"📦 Posizioni aperte: {s['num_positions']}")
-    lines.append(f"🔄 Trade chiusi: {s['num_trades']}")
-    if pf.positions:
-        lines.append("\n*Posizioni aperte:*")
-        for sym, pos in pf.positions.items():
-            cur = prices.get(sym, 0)
-            pnl = pf.pnl(sym, cur)
-            icon = "🟢" if pnl >= 0 else "🔴"
-            name = get_asset_name(sym)
-            lines.append(f"  {icon} {name}: {pos['qty']}x @ ${pos['avg_price']:.2f} → ${cur:.2f} ({pnl:+.2f})")
+def format_news():
+    from data.market import get_news
+    news = get_news("SPY", 8)
+    if not news:
+        return "Nessuna notizia disponibile."
+    lines = ["📰 *Ultime notizie di mercato:*\n"]
+    for n in news:
+        lines.append(f"• {n['title']}")
+        lines.append(f"  _{n['publisher']}_\n")
     return "\n".join(lines)
 
 async def start(update, context):
@@ -197,7 +178,8 @@ async def start(update, context):
         f"📌 Il tuo ID: `{uid}`\n\n"
         f"`/lista` - Asset disponibili\n"
         f"`/analizza <nome>` - Analisi\n"
-        f"`/portafoglio` - P&L virtuale\n"
+        f"`/notizie` - Ultime notizie\n"
+        f"`/notizie <nome>` - Notizie su un asset\n"
         f"`/chat <msg>` - Parla con l'AI\n\n"
         f"Invia qualsiasi messaggio per chattare con l'AI."
     )
@@ -207,9 +189,21 @@ async def lista(update, context):
     await update.message.reply_text(format_asset_list(), parse_mode="Markdown")
 
 @authorized
-async def portafoglio(update, context):
-    msg = format_portfolio()
-    await update.message.reply_text(msg, parse_mode="Markdown")
+async def notizie_cmd(update, context):
+    text = " ".join(context.args) if context.args else ""
+    if text:
+        try:
+            label, symbol = resolve_symbol(text)
+            news = get_news_text(symbol)
+            if news:
+                await update.message.reply_text(f"📰 *Notizie per {label}:*\n{news}", parse_mode="Markdown")
+            else:
+                await update.message.reply_text(f"❌ Nessuna notizia per {label}.")
+        except:
+            await update.message.reply_text(f"❌ Asset '{text}' non trovato.")
+    else:
+        msg = format_news()
+        await update.message.reply_text(msg, parse_mode="Markdown")
 
 @authorized
 async def analizza(update, context):
@@ -317,7 +311,7 @@ def start_bot():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("lista", lista))
-    app.add_handler(CommandHandler("portafoglio", portafoglio))
+    app.add_handler(CommandHandler("notizie", notizie_cmd))
     app.add_handler(CommandHandler("analizza", analizza))
     app.add_handler(CommandHandler("chat", chat_cmd))
     app.add_handler(CommandHandler("stop", stop_cmd))
