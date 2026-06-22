@@ -170,6 +170,7 @@ def _get_analysis(symbol, label):
 
 _chat_history = {}
 _chat_mode = set()
+_live_streams = {}
 
 def _get_history(user_id):
     if user_id not in _chat_history:
@@ -221,7 +222,8 @@ async def start(update, context):
             f"`/lista` - Asset disponibili\n"
             f"`/prezzo <nome>` - Prezzo in tempo reale\n"
             f"`/grafico <nome>` - Grafico candlestick\n"
-            f"`/live <nome>` - Grafico live 3 min\n"
+            f"`/live <nome>` - Grafico live 2 min\n"
+            f"`/stoplive` - Ferma il live\n"
             f"`/analizza <nome>` - Analisi completa\n"
             f"`/confronta <a1> <a2>` - Confronto due asset\n"
             f"`/backtest <nome>` - Backtest 2 anni\n"
@@ -428,9 +430,15 @@ async def live(update, context):
     except:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — si aggiorna ogni 10s per 2 minuti...")
+    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — `/stoplive` per fermare, si aggiorna ogni 10s", parse_mode="Markdown")
+    cid = update.effective_chat.id
+    _live_streams[cid] = True
+    stopped = False
     photo_msg = None
     for i in range(12):
+        if not _live_streams.get(cid):
+            stopped = True
+            break
         try:
             chart = create_live_chart(symbol, f"{label}")
             if not chart:
@@ -445,7 +453,7 @@ async def live(update, context):
                 await photo_msg.delete()
             with open(chart, "rb") as f:
                 photo_msg = await context.bot.send_photo(
-                    chat_id=update.effective_chat.id, photo=f, caption=caption
+                    chat_id=cid, photo=f, caption=caption
                 )
             try: os.unlink(chart)
             except: pass
@@ -454,8 +462,10 @@ async def live(update, context):
         except Exception as e:
             await update.message.reply_text(f"❌ Live interrotto: {str(e)[:150]}")
             break
+    _live_streams.pop(cid, None)
     if photo_msg:
-        await photo_msg.edit_caption(caption=f"📊 {_esc(label)} — Live terminato ✅")
+        end = " fermato" if stopped else " terminato"
+        await photo_msg.edit_caption(caption=f"📊 {_esc(label)} — Live{end} ✅")
     await msg.delete()
 
 @authorized
@@ -636,6 +646,15 @@ async def stop_cmd(update, context):
     await update.message.reply_text("🚪 Modalità chat disattivata. Usa `/chat` per riattivarla.", parse_mode="Markdown")
 
 @authorized
+async def stoplive(update, context):
+    cid = update.effective_chat.id
+    if cid in _live_streams:
+        _live_streams[cid] = False
+        await update.message.reply_text("⏹️ Live stream fermato.")
+    else:
+        await update.message.reply_text("Nessun live attivo in questa chat.")
+
+@authorized
 async def handle_message(update, context):
     uid = update.effective_user.id
     if uid not in _chat_mode:
@@ -680,6 +699,7 @@ def start_bot():
     app.add_handler(CommandHandler("backtest", backtest_cmd))
     app.add_handler(CommandHandler("grafico", grafico))
     app.add_handler(CommandHandler("live", live))
+    app.add_handler(CommandHandler("stoplive", stoplive))
     app.add_handler(CommandHandler("avvisa", avvisa))
     app.add_handler(CommandHandler("avvisi", avvisi))
     app.add_handler(CommandHandler("disattiva", disattiva))
