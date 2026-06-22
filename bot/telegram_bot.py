@@ -432,7 +432,7 @@ async def live(update, context):
     photo_msg = None
     for i in range(6):
         try:
-            chart = create_chart(symbol, f"{label} #{i+1}", 5)
+            chart = create_chart(symbol, f"{label} #{i+1}", 90)
             if not chart:
                 await msg.edit_text(f"❌ Errore grafico #{i+1}")
                 break
