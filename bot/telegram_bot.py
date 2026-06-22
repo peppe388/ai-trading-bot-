@@ -41,7 +41,7 @@ def _save_auth():
 
 _load_auth()
 
-from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name
+from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name, get_current_price
 from data.indicators import add_indicators, get_latest_indicators
 from advisor.analyser import analyse
 from advisor.portfolio import Portfolio
@@ -124,8 +124,8 @@ def _get_analysis(symbol, label):
     if not USE_GROQ:
         try:
             from models.trainer import train_model, predict
-            lstm_model = train_model(symbol)
-            lstm_pred = predict(lstm_model, symbol)
+            model_trained, scaler_trained, _ = train_model(symbol)
+            lstm_pred = predict(model_trained, scaler_trained, df)
             lstm_pred = round(float(lstm_pred), 2)
         except:
             pass
@@ -163,7 +163,6 @@ def format_portfolio():
     prices = {}
     for _, sym in ALL_ASSETS:
         try:
-            from data.market import get_current_price
             p = get_current_price(sym)
             if p:
                 prices[sym] = p
@@ -237,7 +236,7 @@ async def analizza(update, context):
         lines = [
             f"📊 *{_esc(label)}* — ${ind['price']:.2f}",
             f"📉 Trend: `{_esc(spk)}` | RSI {ind['rsi']} | MACD {_esc(ind['macd_status'])}",
-            f"📊 Stoccastico: {ind.get('stoch', 'N/A')} | OBV: {_esc(ind.get('obv_status', 'N/A'))}",
+            f"📊 Stoccastico: {ind.get('stoch', 'N/A')} | OBV: {_esc(ind.get('obv_trend', 'N/A'))}",
             f"",
             f"📈 Segnale: *{_esc(emoji_sig)}* (conf: {conf}%)",
             f"🎯 Target: ${tg:.2f} | 🛑 Stop: ${sl:.2f}",
