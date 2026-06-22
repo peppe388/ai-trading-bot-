@@ -21,9 +21,9 @@ def add_alert(user_id, symbol, label, target_price, chat_id):
 
 def remove_alert(alert_id, user_id):
     conn = _db()
-    conn.execute("DELETE FROM alerts WHERE id = ? AND user_id = ?", (alert_id, user_id))
+    c = conn.execute("DELETE FROM alerts WHERE id = ? AND user_id = ?", (alert_id, user_id))
     conn.commit()
-    r = conn.total_changes
+    r = c.rowcount
     conn.close()
     return r > 0
 
