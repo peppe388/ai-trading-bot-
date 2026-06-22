@@ -669,7 +669,8 @@ async def reload_cmd(update, context):
     if not (admin and admin.isdigit() and uid == int(admin)):
         return
     cid = update.effective_chat.id
-    for mid in list(_msg_log.get(cid, set())):
+    mids = sorted(_msg_log.get(cid, set()))[-100:]
+    for mid in mids:
         try:
             await context.bot.delete_message(chat_id=cid, message_id=mid)
         except:
