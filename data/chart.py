@@ -1,5 +1,6 @@
 import os, tempfile
 import pandas as pd
+import yfinance as yf
 from data.market import fetch_data
 
 CHART_ENABLED = False
@@ -86,3 +87,41 @@ def create_comparison(sym1, sym2, label1, label2, days=90):
     plt.savefig(tmp.name, facecolor=fig.get_facecolor(), dpi=120)
     plt.close()
     return tmp.name
+
+def create_live_chart(symbol, label):
+    if not CHART_ENABLED:
+        return None
+    try:
+        df = yf.download(symbol, period="5d", interval="15m", progress=False)
+        if df.empty or len(df) < 10:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [c[0] for c in df.columns]
+    except:
+        return None
+    plot_df = df.tail(40).copy()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    try:
+        mc = mpf.make_marketcolors(
+            up=GREEN, down=RED,
+            edge='inherit', wick='inherit', volume=DARK_GRID
+        )
+        style = mpf.make_mpf_style(
+            marketcolors=mc,
+            figcolor=DARK_BG, facecolor=DARK_BG,
+            gridcolor=DARK_GRID, gridstyle=':',
+            rc={'font.size': 8, 'axes.labelcolor': 'white',
+                'axes.edgecolor': '#555', 'xtick.color': 'white',
+                'ytick.color': 'white'}
+        )
+        mpf.plot(
+            plot_df, type='candle', style=style,
+            volume=False, title=label, ylabel='$',
+            savefig=dict(fname=tmp.name, dpi=120, facecolor=DARK_BG),
+            figsize=(9, 4), tight_layout=True,
+        )
+        return tmp.name
+    except:
+        try: os.unlink(tmp.name)
+        except: pass
+        return None

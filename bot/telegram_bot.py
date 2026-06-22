@@ -61,7 +61,7 @@ _load_auth()
 from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name, get_current_price
 from data.indicators import add_indicators, get_latest_indicators
 from advisor.analyser import analyse
-from data.chart import create_chart, create_comparison, CHART_ENABLED
+from data.chart import create_chart, create_comparison, create_live_chart, CHART_ENABLED
 from data.alerts import add_alert, remove_alert, get_user_alerts, start_checker
 from advisor.backtest import run_backtest, format_backtest
 from config import FOREX_PAIRS, STOCKS, COMMODITIES, CRYPTO
@@ -428,14 +428,17 @@ async def live(update, context):
     except:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — 3 minuti...")
+    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — 3 minuti (dati intraday 15min)...")
     photo_msg = None
     for i in range(6):
         try:
-            chart = create_chart(symbol, f"{label} #{i+1}", 90)
+            chart = create_live_chart(symbol, f"{label} #{i+1}")
             if not chart:
-                await msg.edit_text(f"❌ Errore grafico #{i+1}")
-                break
+                await msg.edit_text(f"❌ Errore grafico #{i+1}, passo a daily...")
+                chart = create_chart(symbol, f"{label} #{i+1}", 90)
+                if not chart:
+                    await msg.edit_text(f"❌ Errore grafico #{i+1}")
+                    break
             df = fetch_data(symbol, 2)
             price = float(df["Close"].iloc[-1]) if not df.empty else 0
             caption = f"📊 {_esc(label)} — Live #{i+1}/6 — ${price:.2f}"
