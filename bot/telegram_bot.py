@@ -13,7 +13,7 @@ if not TOKEN:
 if not TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN non impostata")
 
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
 
 CFG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 AUTHORIZED_USERS = set()
@@ -57,9 +57,9 @@ def _sparkline(data, width=10):
     rng = mx - mn if mx != mn else 1
     return "".join(SPARK_CHARS[min(int((v - mn) / rng * 7), 7)] for v in sampled)
 
-def _gemini_advice(asset_name, symbol, analysis, news_text=""):
-    from google import genai
-    client = genai.Client(api_key=GEMINI_KEY)
+def _groq_advice(asset_name, symbol, analysis, news_text=""):
+    from groq import Groq
+    client = Groq(api_key=GROQ_KEY)
     i = analysis["indicators"]
     signal = analysis["signal"]
     conf = analysis["confidence"]
@@ -75,32 +75,40 @@ def _gemini_advice(asset_name, symbol, analysis, news_text=""):
         f"Termina con: DISCLAIMER: progetto educativo."
     )
     try:
-        resp = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
-        return resp.text
-    except Exception as e:
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7, max_tokens=512,
+        )
+        return resp.choices[0].message.content
+    except Exception:
         return f"{verdict} (conf: {conf}%) | {asset_name} a ${i['price']}, trend {i['trend']}. DISCLAIMER: progetto educativo"
 
-def _gemini_chat(message, history=None):
-    from google import genai
-    client = genai.Client(api_key=GEMINI_KEY)
-    prompt = "Sei un assistente AI utile, esperto in finanza ed economia. Rispondi in modo diretto e conciso, senza presentarti ogni volta. Parla italiano.\n\n"
+def _groq_chat(message, history=None):
+    from groq import Groq
+    client = Groq(api_key=GROQ_KEY)
+    system = {"role": "system", "content": "Sei un assistente AI utile, esperto in finanza ed economia. Rispondi in modo diretto e conciso, senza presentarti ogni volta. Parla italiano."}
+    messages = [system]
     if history:
-        ctx = "\n".join(f"{h['role']}: {h['msg']}" for h in history[-6:])
-        prompt += ctx + "\n\n"
-    user_msg = f"user: {message}"
-    prompt += user_msg
+        for h in history[-6:]:
+            messages.append({"role": h["role"], "content": h["msg"]})
+    messages.append({"role": "user", "content": message})
     try:
-        resp = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
-        return resp.text
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.7, max_tokens=512,
+        )
+        return resp.choices[0].message.content
     except Exception as e:
         return f"Errore AI: {str(e)[:100]}"
 
-if GEMINI_KEY:
-    USE_GEMINI = True
-    get_advice = _gemini_advice
-    chat_ai = _gemini_chat
+if GROQ_KEY:
+    USE_GROQ = True
+    get_advice = _groq_advice
+    chat_ai = _groq_chat
 else:
-    USE_GEMINI = False
+    USE_GROQ = False
     from advisor.reporter import get_advice, chat as chat_ai
 
 def _get_analysis(symbol, label):
@@ -110,7 +118,7 @@ def _get_analysis(symbol, label):
     spk = _sparkline(prices, 8)
     ind = get_latest_indicators(df)
     lstm_pred = 0
-    if not USE_GEMINI:
+    if not USE_GROQ:
         try:
             from models.trainer import train_model, predict
             lstm_model = train_model(symbol)
@@ -300,7 +308,7 @@ def start_bot():
     app.add_handler(CommandHandler("analizza", analizza))
     app.add_handler(CommandHandler("chat", chat_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    mode = "Gemini" if USE_GEMINI else "Ollama"
+    mode = "Groq-Llama3.3" if USE_GROQ else "Ollama"
     print(f" Telegram Bot avviato su @oracle_fx_bot (AI: {mode})")
     app.run_polling(drop_pending_updates=True)
 
