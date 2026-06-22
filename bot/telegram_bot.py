@@ -207,6 +207,7 @@ async def start(update, context):
     uid = update.effective_user.id
     admin = os.environ.get("ADMIN_ID", "")
     if admin and admin.isdigit() and uid == int(admin):
+        _add_user(uid)
         await update.message.reply_text(
             "✅ Sei l'admin. Bot avviato.\n"
             f"`/aggiungi <ID>` - Aggiungi un utente\n"
