@@ -213,9 +213,10 @@ async def notizie_cmd(update, context):
     if text:
         try:
             label, symbol = resolve_symbol(text)
-            news = get_news_text(symbol)
-            if news:
-                await update.message.reply_text(f"📰 *Notizie per {label}:*\n{news}", parse_mode="Markdown")
+            raw = get_news_text(symbol)
+            if raw:
+                translated = _translate(raw)
+                await update.message.reply_text(f"📰 *Notizie per {label}:*\n{translated}", parse_mode="Markdown")
             else:
                 await update.message.reply_text(f"❌ Nessuna notizia per {label}.")
         except:
