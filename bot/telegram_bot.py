@@ -1,4 +1,4 @@
-import os, sys, json, logging, threading, sqlite3
+import os, sys, json, logging, threading, sqlite3, asyncio
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -221,6 +221,7 @@ async def start(update, context):
             f"`/lista` - Asset disponibili\n"
             f"`/prezzo <nome>` - Prezzo in tempo reale\n"
             f"`/grafico <nome>` - Grafico candlestick\n"
+            f"`/live <nome>` - Grafico live 3 min\n"
             f"`/analizza <nome>` - Analisi completa\n"
             f"`/confronta <a1> <a2>` - Confronto due asset\n"
             f"`/backtest <nome>` - Backtest 2 anni\n"
@@ -413,6 +414,47 @@ async def grafico(update, context):
     with open(chart, "rb") as f:
         await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${price:.2f}")
     os.unlink(chart)
+
+@authorized
+async def live(update, context):
+    if not context.args:
+        await update.message.reply_text("Usa: `/live NVDA` o `/live oro`", parse_mode="Markdown")
+        return
+    if not CHART_ENABLED:
+        await update.message.reply_text("❌ Grafici non disponibili.")
+        return
+    try:
+        label, symbol = resolve_symbol(" ".join(context.args))
+    except:
+        await update.message.reply_text("❌ Asset non trovato.")
+        return
+    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — 3 minuti...")
+    photo_msg = None
+    for i in range(6):
+        try:
+            chart = create_chart(symbol, f"{label} #{i+1}", 5)
+            if not chart:
+                await msg.edit_text(f"❌ Errore grafico #{i+1}")
+                break
+            df = fetch_data(symbol, 2)
+            price = float(df["Close"].iloc[-1]) if not df.empty else 0
+            caption = f"📊 {_esc(label)} — Live #{i+1}/6 — ${price:.2f}"
+            if photo_msg:
+                await photo_msg.delete()
+            with open(chart, "rb") as f:
+                photo_msg = await context.bot.send_photo(
+                    chat_id=update.effective_chat.id, photo=f, caption=caption
+                )
+            try: os.unlink(chart)
+            except: pass
+            if i < 5:
+                await asyncio.sleep(30)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Live interrotto: {str(e)[:150]}")
+            break
+    if photo_msg:
+        await photo_msg.edit_caption(caption=f"📊 {_esc(label)} — Live terminato ✅")
+    await msg.delete()
 
 @authorized
 async def avvisa(update, context):
@@ -635,6 +677,7 @@ def start_bot():
     app.add_handler(CommandHandler("confronta", confronta))
     app.add_handler(CommandHandler("backtest", backtest_cmd))
     app.add_handler(CommandHandler("grafico", grafico))
+    app.add_handler(CommandHandler("live", live))
     app.add_handler(CommandHandler("avvisa", avvisa))
     app.add_handler(CommandHandler("avvisi", avvisi))
     app.add_handler(CommandHandler("disattiva", disattiva))
