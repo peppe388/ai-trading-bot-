@@ -1,4 +1,4 @@
-import os, sys, json, logging, threading
+import os, sys, json, logging, threading, sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,7 +15,7 @@ if not TOKEN:
 
 GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
 
-CFG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth.db")
 AUTHORIZED_USERS = set()
 
 def _load_auth():
@@ -23,21 +23,37 @@ def _load_auth():
     admin = os.environ.get("ADMIN_ID", "")
     if admin and admin.isdigit():
         AUTHORIZED_USERS.add(int(admin))
-    if os.path.exists(CFG_FILE):
-        try:
-            with open(CFG_FILE) as f:
-                d = json.load(f)
-                AUTHORIZED_USERS.update(d.get("authorized", []))
-        except:
-            pass
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("CREATE TABLE IF NOT EXISTS auth (user_id INTEGER PRIMARY KEY)")
+        for row in conn.execute("SELECT user_id FROM auth"):
+            AUTHORIZED_USERS.add(row[0])
+        conn.close()
+    except:
+        pass
+
+def _add_user(user_id):
+    AUTHORIZED_USERS.add(user_id)
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("INSERT OR IGNORE INTO auth (user_id) VALUES (?)", (user_id,))
+        conn.commit()
+        conn.close()
+    except:
+        pass
+
+def _del_user(user_id):
+    AUTHORIZED_USERS.discard(user_id)
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("DELETE FROM auth WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+    except:
+        pass
 
 def _esc(text):
     return str(text).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
-
-def _save_auth():
-    os.makedirs(os.path.dirname(CFG_FILE), exist_ok=True)
-    with open(CFG_FILE, "w") as f:
-        json.dump({"authorized": list(AUTHORIZED_USERS)}, f, indent=2)
 
 _load_auth()
 
@@ -160,7 +176,7 @@ def authorized(func):
         if uid not in AUTHORIZED_USERS:
             _load_auth()
             if uid not in AUTHORIZED_USERS:
-                await update.message.reply_text("Bot privato. Non sei autorizzato. Usa /start prima.")
+                await update.message.reply_text("Bot privato. Non sei autorizzato. Contatta l'admin.")
                 return
         return await func(update, context)
     return wrapper
@@ -189,19 +205,47 @@ def format_news():
 
 async def start(update, context):
     uid = update.effective_user.id
-    name = update.effective_user.first_name or "Utente"
-    AUTHORIZED_USERS.add(uid)
-    _save_auth()
-    await update.message.reply_text(
-        f"✅ Benvenuto {name}! Sei stato autorizzato.\n"
-        f"📌 Il tuo ID: `{uid}`\n\n"
-        f"`/lista` - Asset disponibili\n"
-        f"`/analizza <nome>` - Analisi\n"
-        f"`/notizie` - Ultime notizie\n"
-        f"`/notizie <nome>` - Notizie su un asset\n"
-        f"`/chat <msg>` - Parla con l'AI\n\n"
-        f"Invia qualsiasi messaggio per chattare con l'AI."
-    )
+    admin = os.environ.get("ADMIN_ID", "")
+    if admin and admin.isdigit() and uid == int(admin):
+        await update.message.reply_text(
+            "✅ Sei l'admin. Bot avviato.\n"
+            f"`/aggiungi <ID>` - Aggiungi un utente\n"
+            f"`/rimuovi <ID>` - Rimuovi un utente\n"
+            f"`/lista` - Asset disponibili\n"
+            f"`/analizza <nome>` - Analisi\n"
+            f"`/notizie` - Ultime notizie\n"
+            f"`/notizie <nome>` - Notizie su un asset\n"
+            f"`/chat <msg>` - Parla con l'AI"
+        )
+    else:
+        await update.message.reply_text(
+            "🤖 Bot privato.\n"
+            "Se non sei autorizzato, contatta l'admin."
+        )
+
+async def aggiungi(update, context):
+    uid = update.effective_user.id
+    admin = os.environ.get("ADMIN_ID", "")
+    if not (admin and admin.isdigit() and uid == int(admin)):
+        return
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Usa: /aggiungi <ID>")
+        return
+    target = int(context.args[0])
+    _add_user(target)
+    await update.message.reply_text(f"✅ Utente `{target}` autorizzato.")
+
+async def rimuovi(update, context):
+    uid = update.effective_user.id
+    admin = os.environ.get("ADMIN_ID", "")
+    if not (admin and admin.isdigit() and uid == int(admin)):
+        return
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Usa: /rimuovi <ID>")
+        return
+    target = int(context.args[0])
+    _del_user(target)
+    await update.message.reply_text(f"🗑️ Utente `{target}` rimosso.")
 
 @authorized
 async def lista(update, context):
@@ -330,6 +374,8 @@ def start_bot():
     from telegram.ext import Application, CommandHandler, MessageHandler, filters
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("aggiungi", aggiungi))
+    app.add_handler(CommandHandler("rimuovi", rimuovi))
     app.add_handler(CommandHandler("lista", lista))
     app.add_handler(CommandHandler("notizie", notizie_cmd))
     app.add_handler(CommandHandler("analizza", analizza))
