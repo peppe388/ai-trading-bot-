@@ -171,6 +171,11 @@ def _get_analysis(symbol, label):
 _chat_history = {}
 _chat_mode = set()
 _live_streams = {}
+_msg_log = {}
+
+async def _log_msg(update, context):
+    if update.message:
+        _msg_log.setdefault(update.effective_chat.id, set()).add(update.message.message_id)
 
 def _get_history(user_id):
     if user_id not in _chat_history:
@@ -663,21 +668,18 @@ async def reload_cmd(update, context):
     admin = os.environ.get("ADMIN_ID", "")
     if not (admin and admin.isdigit() and uid == int(admin)):
         return
+    cid = update.effective_chat.id
+    for mid in list(_msg_log.get(cid, set())):
+        try:
+            await context.bot.delete_message(chat_id=cid, message_id=mid)
+        except:
+            pass
+    _msg_log[cid] = set()
     _chat_history.clear()
     _chat_mode.clear()
     _live_streams.clear()
     AUTHORIZED_USERS.clear()
     _load_auth()
-    msg = await update.message.reply_text("🔄 Ricarico...", parse_mode="Markdown")
-    await asyncio.sleep(0.5)
-    try:
-        await update.message.delete()
-    except:
-        pass
-    try:
-        await msg.delete()
-    except:
-        pass
 
 async def nukebomb(update, context):
     global _nuke_armed
@@ -750,6 +752,19 @@ def start_bot():
     t.start()
     from telegram.ext import Application, CommandHandler, MessageHandler, filters
     app = Application.builder().token(TOKEN).build()
+    _orig_send = app.bot.send_message
+    _orig_photo = app.bot.send_photo
+    async def _track_send(chat_id, *a, **kw):
+        m = await _orig_send(chat_id, *a, **kw)
+        _msg_log.setdefault(chat_id, set()).add(m.message_id)
+        return m
+    async def _track_photo(chat_id, *a, **kw):
+        m = await _orig_photo(chat_id, *a, **kw)
+        _msg_log.setdefault(chat_id, set()).add(m.message_id)
+        return m
+    app.bot.send_message = _track_send
+    app.bot.send_photo = _track_photo
+    app.add_handler(MessageHandler(filters.ALL, _log_msg), group=-1)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("aggiungi", aggiungi))
     app.add_handler(CommandHandler("rimuovi", rimuovi))
