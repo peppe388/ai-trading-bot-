@@ -133,6 +133,7 @@ def _get_analysis(symbol, label):
     return analysis, ind, spk
 
 _chat_history = {}
+_chat_mode = set()
 
 def _get_history(user_id):
     if user_id not in _chat_history:
@@ -258,11 +259,17 @@ async def analizza(update, context):
 
 @authorized
 async def chat_cmd(update, context):
+    uid = update.effective_user.id
+    _chat_mode.add(uid)
     if not context.args:
-        await update.message.reply_text("Usa: `/chat cosa ne pensi del mercato?`", parse_mode="Markdown")
+        await update.message.reply_text(
+            "💬 *Modalità chat attivata!*\n\n"
+            "Ora puoi scrivere qualsiasi messaggio e parlerò con l'AI.\n"
+            "Usa `/stop` per uscire dalla modalità chat.",
+            parse_mode="Markdown"
+        )
         return
     msg = " ".join(context.args)
-    uid = update.effective_user.id
     history = _get_history(uid)
     await update.message.reply_text("💬 AI sta pensando...")
     reply = chat_ai(msg, history)
@@ -274,9 +281,17 @@ async def chat_cmd(update, context):
     await update.message.reply_text(reply[:4000])
 
 @authorized
-async def handle_message(update, context):
-    text = update.message.text.strip()
+async def stop_cmd(update, context):
     uid = update.effective_user.id
+    _chat_mode.discard(uid)
+    await update.message.reply_text("🚪 Modalità chat disattivata. Usa `/chat` per riattivarla.", parse_mode="Markdown")
+
+@authorized
+async def handle_message(update, context):
+    uid = update.effective_user.id
+    if uid not in _chat_mode:
+        return
+    text = update.message.text.strip()
     history = _get_history(uid)
     await update.message.reply_text("💬 AI sta pensando...")
     reply = chat_ai(text, history)
@@ -310,6 +325,8 @@ def start_bot():
     app.add_handler(CommandHandler("portafoglio", portafoglio))
     app.add_handler(CommandHandler("analizza", analizza))
     app.add_handler(CommandHandler("chat", chat_cmd))
+    app.add_handler(CommandHandler("stop", stop_cmd))
+    app.add_handler(CommandHandler("esci", stop_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     mode = "Groq-Llama3.3" if USE_GROQ else "Ollama"
     print(f" Telegram Bot avviato su @oracle_fx_bot (AI: {mode})")
