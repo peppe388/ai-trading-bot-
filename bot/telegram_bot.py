@@ -144,8 +144,10 @@ def authorized(func):
     async def wrapper(update, context):
         uid = update.effective_user.id
         if uid not in AUTHORIZED_USERS:
-            await update.message.reply_text("Bot privato. Non sei autorizzato.")
-            return
+            _load_auth()
+            if uid not in AUTHORIZED_USERS:
+                await update.message.reply_text("Bot privato. Non sei autorizzato. Usa /start prima.")
+                return
         return await func(update, context)
     return wrapper
 
@@ -189,23 +191,17 @@ def format_portfolio():
 async def start(update, context):
     uid = update.effective_user.id
     name = update.effective_user.first_name or "Utente"
-    if uid not in AUTHORIZED_USERS:
-        AUTHORIZED_USERS.add(uid)
-        _save_auth()
-        await update.message.reply_text(
-            f"✅ Benvenuto {name}! Sei stato autorizzato come unico utente del bot.\n\n"
-            f"Comandi:\n"
-            f"`/lista` - Tutti gli asset\n"
-            f"`/analizza <nome>` - Analisi completa\n"
-            f"`/portafoglio` - P&L virtuale\n"
-            f"`/chat <msg>` - Parla con l'AI\n\n"
-            f"Invia qualsiasi messaggio per chattare con l'AI."
-        )
-    else:
-        await update.message.reply_text(
-            f"Ciao {name}! Sono il tuo trading advisor.\n"
-            f"`/lista` `/analizza <nome>` `/portafoglio` `/chat <msg>`"
-        )
+    AUTHORIZED_USERS.add(uid)
+    _save_auth()
+    await update.message.reply_text(
+        f"✅ Benvenuto {name}! Sei stato autorizzato.\n"
+        f"📌 Il tuo ID: `{uid}`\n\n"
+        f"`/lista` - Asset disponibili\n"
+        f"`/analizza <nome>` - Analisi\n"
+        f"`/portafoglio` - P&L virtuale\n"
+        f"`/chat <msg>` - Parla con l'AI\n\n"
+        f"Invia qualsiasi messaggio per chattare con l'AI."
+    )
 
 @authorized
 async def lista(update, context):
