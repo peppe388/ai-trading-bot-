@@ -48,10 +48,12 @@ def get_news(symbol, max_items=5):
         news = ticker.news or []
         items = []
         for article in news[:max_items]:
+            c = article.get("content", {})
+            provider = c.get("provider", {})
             items.append({
-                "title": article.get("title", ""),
-                "link": article.get("link", ""),
-                "publisher": article.get("publisher", ""),
+                "title": c.get("title", ""),
+                "link": c.get("canonicalUrl", {}).get("url", "") if isinstance(c.get("canonicalUrl"), dict) else "",
+                "publisher": provider.get("displayName", "") if isinstance(provider, dict) else "",
             })
         return items
     except Exception:
