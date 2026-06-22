@@ -20,13 +20,16 @@ AUTHORIZED_USERS = set()
 
 def _load_auth():
     global AUTHORIZED_USERS
+    admin = os.environ.get("ADMIN_ID", "")
+    if admin and admin.isdigit():
+        AUTHORIZED_USERS.add(int(admin))
     if os.path.exists(CFG_FILE):
         try:
             with open(CFG_FILE) as f:
                 d = json.load(f)
-                AUTHORIZED_USERS = set(d.get("authorized", []))
+                AUTHORIZED_USERS.update(d.get("authorized", []))
         except:
-            AUTHORIZED_USERS = set()
+            pass
 
 def _esc(text):
     return str(text).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
