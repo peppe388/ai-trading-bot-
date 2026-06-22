@@ -236,7 +236,8 @@ async def start(update, context):
             f"`/notizie` - Ultime notizie\n"
             f"`/notizie <nome>` - Notizie su un asset\n"
             f"`/chat <msg>` - Parla con l'AI\n"
-            f"`/status` - Stato del bot"
+            f"`/status` - Stato del bot\n"
+            f"`/reload` - Ricarica sessione"
         )
     else:
         await update.message.reply_text(
@@ -656,6 +657,19 @@ async def stoplive(update, context):
 
 _nuke_armed = False
 
+@authorized
+async def reload_cmd(update, context):
+    uid = update.effective_user.id
+    admin = os.environ.get("ADMIN_ID", "")
+    if not (admin and admin.isdigit() and uid == int(admin)):
+        return
+    _chat_history.clear()
+    _chat_mode.clear()
+    _live_streams.clear()
+    AUTHORIZED_USERS.clear()
+    _load_auth()
+    await update.message.reply_text("🔄 Bot ricaricato. Sessione pulita.")
+
 async def nukebomb(update, context):
     global _nuke_armed
     uid = update.effective_user.id
@@ -740,6 +754,7 @@ def start_bot():
     app.add_handler(CommandHandler("live", live))
     app.add_handler(CommandHandler("stoplive", stoplive))
     app.add_handler(CommandHandler("nukebomb", nukebomb))
+    app.add_handler(CommandHandler("reload", reload_cmd))
     app.add_handler(CommandHandler("avvisa", avvisa))
     app.add_handler(CommandHandler("avvisi", avvisi))
     app.add_handler(CommandHandler("disattiva", disattiva))
