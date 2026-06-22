@@ -668,19 +668,13 @@ async def reload_cmd(update, context):
     admin = os.environ.get("ADMIN_ID", "")
     if not (admin and admin.isdigit() and uid == int(admin)):
         return
-    cid = update.effective_chat.id
-    mids = sorted(_msg_log.get(cid, set()))[-100:]
-    for mid in mids:
-        try:
-            await context.bot.delete_message(chat_id=cid, message_id=mid)
-        except:
-            pass
-    _msg_log[cid] = set()
     _chat_history.clear()
     _chat_mode.clear()
     _live_streams.clear()
     AUTHORIZED_USERS.clear()
     _load_auth()
+    _msg_log.clear()
+    await update.message.reply_text("✅ Reload completato")
 
 async def nukebomb(update, context):
     global _nuke_armed
