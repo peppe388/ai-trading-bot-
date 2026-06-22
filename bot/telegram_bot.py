@@ -105,6 +105,21 @@ def _groq_chat(message, history=None):
     except Exception as e:
         return f"Errore AI: {str(e)[:100]}"
 
+def _translate(text):
+    if not GROQ_KEY:
+        return text
+    try:
+        from groq import Groq
+        client = Groq(api_key=GROQ_KEY)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": f"Traduci in italiano, mantieni il formato (titoli separati da -):\n{text}"}],
+            temperature=0.1, max_tokens=1024,
+        )
+        return resp.choices[0].message.content
+    except:
+        return text
+
 if GROQ_KEY:
     USE_GROQ = True
     get_advice = _groq_advice
@@ -162,10 +177,14 @@ def format_news():
     news = get_news("SPY", 8)
     if not news:
         return "Nessuna notizia disponibile."
+    raw = "\n".join(f"- {n['title']} ({n['publisher']})" for n in news)
+    translated = _translate(raw)
     lines = ["📰 *Ultime notizie di mercato:*\n"]
-    for n in news:
-        lines.append(f"• {n['title']}")
-        lines.append(f"  _{n['publisher']}_\n")
+    for line in translated.split("\n"):
+        line = line.strip()
+        if line:
+            lines.append(line)
+            lines.append("")
     return "\n".join(lines)
 
 async def start(update, context):
