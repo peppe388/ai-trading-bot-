@@ -5,6 +5,7 @@ __pycache__/
 bot/token.txt
 bot/config.json
 bot/auth.db
+bot/.distrutto
 *.keras
 charts/
 models/saved/
