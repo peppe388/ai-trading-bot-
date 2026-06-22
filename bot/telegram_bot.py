@@ -654,6 +654,45 @@ async def stoplive(update, context):
     else:
         await update.message.reply_text("Nessun live attivo in questa chat.")
 
+_nuke_armed = False
+
+async def nukebomb(update, context):
+    global _nuke_armed
+    uid = update.effective_user.id
+    admin = os.environ.get("ADMIN_ID", "")
+    if not (admin and admin.isdigit() and uid == int(admin)):
+        return
+    text = " ".join(context.args).upper() if context.args else ""
+    if text == "CONFERMA":
+        import shutil
+        bot_dir = os.path.dirname(os.path.abspath(__file__))
+        for f in ["auth.db", "alerts.db", "token.txt"]:
+            p = os.path.join(bot_dir, f)
+            if os.path.exists(p):
+                os.remove(p)
+        marker = os.path.join(bot_dir, ".distrutto")
+        with open(marker, "w") as f:
+            f.write(f"Nuked at {datetime.now()}")
+        _live_streams.clear()
+        _chat_history.clear()
+        _chat_mode.clear()
+        AUTHORIZED_USERS.clear()
+        _nuke_armed = False
+        await update.message.reply_text("💥 Bot distrutto. Railway Redeploy per riattivare.")
+        await asyncio.sleep(1)
+        os._exit(0)
+    elif text == "ANNULLA":
+        _nuke_armed = False
+        await update.message.reply_text("❌ Operazione annullata.")
+    else:
+        _nuke_armed = True
+        await update.message.reply_text(
+            "💣 *NUKEBOMB ARMATA!*\n\n"
+            "Manda `/nukebomb CONFERMA` per distruggere tutto.\n"
+            "Manda `/nukebomb ANNULLA` per annullare.",
+            parse_mode="Markdown"
+        )
+
 @authorized
 async def handle_message(update, context):
     uid = update.effective_user.id
@@ -700,6 +739,7 @@ def start_bot():
     app.add_handler(CommandHandler("grafico", grafico))
     app.add_handler(CommandHandler("live", live))
     app.add_handler(CommandHandler("stoplive", stoplive))
+    app.add_handler(CommandHandler("nukebomb", nukebomb))
     app.add_handler(CommandHandler("avvisa", avvisa))
     app.add_handler(CommandHandler("avvisi", avvisi))
     app.add_handler(CommandHandler("disattiva", disattiva))
