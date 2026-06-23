@@ -151,7 +151,7 @@ else:
     from advisor.reporter import get_advice, chat as chat_ai
 
 def _get_analysis(symbol, label):
-    df = fetch_data(symbol, 90)
+    df = fetch_data(symbol, 365)
     df = add_indicators(df)
     prices = df["Close"].values[-30:].tolist()
     spk = _sparkline(prices, 8)
@@ -406,13 +406,12 @@ async def grafico(update, context):
     except:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    await update.message.reply_text(f"📈 Genero grafico per {_esc(label)}...")
-    chart = create_chart(symbol, label, 90)
+    await update.message.reply_text(f"📈 Genero grafico intraday per {_esc(label)}...")
+    chart = create_live_chart(symbol, label)
     if not chart:
-        await update.message.reply_text("❌ Impossibile generare il grafico.")
+        await update.message.reply_text("❌ Impossibile generare il grafico intraday.")
         return
-    df = fetch_data(symbol, 5)
-    price = float(df["Close"].iloc[-1]) if not df.empty else 0
+    price = get_current_price(symbol) or 0
     with open(chart, "rb") as f:
         await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${price:.2f}")
     os.unlink(chart)
@@ -605,10 +604,11 @@ async def analizza(update, context):
         await status_msg.edit_text("\n".join(filter(None, lines)), parse_mode="Markdown")
         news = get_news_text(symbol)
         if CHART_ENABLED:
-            chart = create_chart(symbol, label, 90)
+            chart = create_live_chart(symbol, label)
             if chart:
+                price = get_current_price(symbol) or ind['price']
                 with open(chart, "rb") as f:
-                    await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${ind['price']:.2f}")
+                    await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${price:.2f}")
                 os.unlink(chart)
         final_msg = await update.message.reply_text(f"⏳ Consulto AI per verdetto finale...")
         advice = get_advice(label, symbol, analysis, news)

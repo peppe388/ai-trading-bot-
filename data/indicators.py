@@ -39,6 +39,11 @@ def add_indicators(df):
 
     df["atr"] = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
 
+    adx = ta.trend.ADXIndicator(high, low, close, window=14)
+    df["adx"] = adx.adx()
+    df["adx_pos"] = adx.adx_pos()
+    df["adx_neg"] = adx.adx_neg()
+
     return df
 
 
@@ -67,6 +72,14 @@ def get_latest_indicators(df):
 
     price_change = ((last["Close"] - prev["Close"]) / prev["Close"]) * 100
 
+    adx_val = last["adx"]
+    adx_signal = "trend" if adx_val > 25 else "range" if adx_val < 20 else "debole"
+
+    window_high = df["High"].rolling(20).max()
+    window_low = df["Low"].rolling(20).min()
+    resistance = round(float(window_high.iloc[-2]), 2) if len(df) >= 3 else round(float(last["High"] * 1.02), 2)
+    support = round(float(window_low.iloc[-2]), 2) if len(df) >= 3 else round(float(last["Low"] * 0.98), 2)
+
     return {
         "price": round(float(last["Close"]), 4),
         "rsi": round(float(rsi_val), 1),
@@ -81,4 +94,8 @@ def get_latest_indicators(df):
         "atr": round(float(last["atr"]), 4),
         "bb_signal": bb_signal,
         "price_change_pct": round(price_change, 2),
+        "adx": round(float(adx_val), 1),
+        "adx_signal": adx_signal,
+        "resistance": resistance,
+        "support": support,
     }

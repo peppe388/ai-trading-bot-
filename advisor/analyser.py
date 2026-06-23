@@ -121,46 +121,67 @@ def get_accuracy(symbol=None, n=30):
 def analyse(df, lstm_prediction_pct):
     indicators = get_latest_indicators(df)
 
-    s_lstm = _lstm_score(lstm_prediction_pct)
-    w_lstm = _lstm_weight(lstm_prediction_pct)
+    has_lstm = lstm_prediction_pct != 0
+    s_lstm = _lstm_score(lstm_prediction_pct) if has_lstm else 0
+    w_lstm = _lstm_weight(lstm_prediction_pct) if has_lstm else 0
 
     s_ta = _ta_ensemble(indicators)
-    w_ta = 0.35
-
     s_vol = _volume_score(df)
-    w_vol = 0.15
-
     s_tf = _multi_tf_score(df)
-    w_tf = 0.15
+
+    adx = indicators.get("adx", 0)
+    in_trend = adx > 25
+    in_range = adx < 20
+    if in_trend:
+        w_ta, w_vol, w_tf = 0.45, 0.15, 0.20
+    elif in_range:
+        w_ta, w_vol, w_tf = 0.25, 0.15, 0.10
+    else:
+        w_ta, w_vol, w_tf = 0.35, 0.15, 0.15
 
     total = s_lstm * w_lstm + s_ta * w_ta + s_vol * w_vol + s_tf * w_tf
     max_possible = w_lstm + w_ta + w_vol + w_tf
     normalized = total / max_possible if max_possible > 0 else 0
 
-    consensus = sum(1 for s in [s_lstm > 0, s_ta > 0, s_vol > 0, s_tf > 0])
-    discord = sum(1 for s in [s_lstm < 0, s_ta < 0, s_vol < 0, s_tf < 0])
+    components = []
+    if has_lstm:
+        components.append(s_lstm > 0)
+    components.extend([s_ta > 0, s_vol > 0, s_tf > 0])
+    n_components = len(components)
+    consensus = sum(1 for s in components if s)
+    discord = n_components - consensus
+    adx_weak = 15 < adx < 25
 
-    if abs(normalized) < 0.15 or (consensus >= 1 and discord >= 1 and abs(normalized) < 0.3):
+    if abs(normalized) < 0.15 or (consensus >= 1 and discord >= 1 and abs(normalized) < 0.3) or adx_weak:
         signal = "HOLD"
         confidence = max(15, int(abs(normalized) * 100))
+        if adx_weak:
+            confidence = max(10, confidence - 10)
     elif normalized > 0.2:
         signal = "BUY"
-        confidence = min(95, int(abs(normalized) * 100))
+        confidence = min(85, int(abs(normalized) * 100))
     elif normalized < -0.2:
         signal = "SELL"
-        confidence = min(95, int(abs(normalized) * 100))
+        confidence = min(85, int(abs(normalized) * 100))
     else:
         signal = "HOLD"
         confidence = max(15, int(abs(normalized) * 100))
 
-    stop_loss = round(indicators["price"] - 1.5 * indicators["atr"], 4) if indicators["atr"] else 0
-    target = round(indicators["price"] + 1.5 * indicators["atr"], 4) if indicators["atr"] else 0
+    price = indicators["price"]
+    support = indicators.get("support", 0)
+    resistance = indicators.get("resistance", 0)
+    if support and resistance and support < price < resistance:
+        stop_loss = round(support, 2)
+        target = round(resistance, 2)
+    else:
+        stop_loss = round(price - 1.5 * indicators["atr"], 2) if indicators["atr"] else 0
+        target = round(price + 1.5 * indicators["atr"], 2) if indicators["atr"] else 0
 
     accuracy = get_accuracy()
 
     return {
         "signal": signal,
-        "confidence": min(confidence, 90),
+        "confidence": min(confidence, 85),
         "lstm_prediction_pct": lstm_prediction_pct,
         "indicators": indicators,
         "ensemble": {

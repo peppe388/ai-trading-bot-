@@ -26,6 +26,10 @@ def fetch_data(symbol, days=730):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [c[0] for c in df.columns]
 
+    outlier_mask = df['Close'].pct_change().abs() > 0.15
+    if outlier_mask.any():
+        df = df[~outlier_mask].copy()
+
     _cache[key] = {"data": df.copy(), "ts": now}
     return df
 
