@@ -655,51 +655,6 @@ async def stoplive(update, context):
         await update.message.reply_text("Nessun live attivo in questa chat.")
 
 _nuke_armed = False
-_terminal_mode = False
-
-async def terminal_cmd(update, context):
-    global _terminal_mode
-    uid = update.effective_user.id
-    admin = os.environ.get("ADMIN_ID", "")
-    if not (admin and admin.isdigit() and uid == int(admin)):
-        return
-    _terminal_mode = True
-    await update.message.reply_text("🖥️ Passo a terminale...")
-    context.application.stop()
-
-def _terminal_loop():
-    print("\n" + "="*50)
-    print(" 🖥️  MODALITÀ TERMINALE")
-    print(" Scrivi messaggi, l'AI risponde qui.")
-    print(" /telegram  → torna su Telegram")
-    print(" /exit      → chiude tutto")
-    print("="*50 + "\n")
-    history = []
-    while True:
-        try:
-            inp = input("Tu > ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n[Chiusura]")
-            os._exit(0)
-        if not inp:
-            continue
-        if inp.lower() == "/telegram":
-            print("↩️  Torno su Telegram...\n")
-            return
-        if inp.lower() == "/exit":
-            print("👋 Alla prossima.")
-            os._exit(0)
-        if inp.startswith("/"):
-            print("❌ Comando sconosciuto in modalità terminale.")
-            continue
-        print("💬 AI sta pensando...")
-        reply = chat_ai(inp, history)
-        if reply:
-            history.append({"role": "user", "msg": inp})
-            history.append({"role": "assistant", "msg": reply})
-            if len(history) > 12:
-                history = history[-12:]
-        print(f"\nAI > {reply}\n")
 
 async def nukebomb(update, context):
     global _nuke_armed
@@ -770,44 +725,36 @@ def _health_server():
 def start_bot():
     t = threading.Thread(target=_health_server, daemon=True)
     t.start()
-    global _terminal_mode
-    while True:
-        from telegram.ext import Application, CommandHandler, MessageHandler, filters
-        app = Application.builder().token(TOKEN).build()
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("aggiungi", aggiungi))
-        app.add_handler(CommandHandler("rimuovi", rimuovi))
-        app.add_handler(CommandHandler("prezzo", prezzo))
-        app.add_handler(CommandHandler("status", status_cmd))
-        app.add_handler(CommandHandler("top", top_flop))
-        app.add_handler(CommandHandler("flop", top_flop))
-        app.add_handler(CommandHandler("confronta", confronta))
-        app.add_handler(CommandHandler("backtest", backtest_cmd))
-        app.add_handler(CommandHandler("grafico", grafico))
-        app.add_handler(CommandHandler("live", live))
-        app.add_handler(CommandHandler("stoplive", stoplive))
-        app.add_handler(CommandHandler("terminal", terminal_cmd))
-        app.add_handler(CommandHandler("nukebomb", nukebomb))
-        app.add_handler(CommandHandler("avvisa", avvisa))
-        app.add_handler(CommandHandler("avvisi", avvisi))
-        app.add_handler(CommandHandler("disattiva", disattiva))
-        app.add_handler(CommandHandler("riepilogo", riepilogo))
-        app.add_handler(CommandHandler("lista", lista))
-        app.add_handler(CommandHandler("notizie", notizie_cmd))
-        app.add_handler(CommandHandler("analizza", analizza))
-        app.add_handler(CommandHandler("chat", chat_cmd))
-        app.add_handler(CommandHandler("stop", stop_cmd))
-        app.add_handler(CommandHandler("esci", stop_cmd))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        start_checker(app)
-        mode = "Groq-Llama3.3" if USE_GROQ else "Ollama"
-        print(f" Telegram Bot avviato su @oracle_fx_bot (AI: {mode})")
-        app.run_polling(drop_pending_updates=True)
-        if _terminal_mode:
-            _terminal_loop()
-            _terminal_mode = False
-            continue
-        break
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("aggiungi", aggiungi))
+    app.add_handler(CommandHandler("rimuovi", rimuovi))
+    app.add_handler(CommandHandler("prezzo", prezzo))
+    app.add_handler(CommandHandler("status", status_cmd))
+    app.add_handler(CommandHandler("top", top_flop))
+    app.add_handler(CommandHandler("flop", top_flop))
+    app.add_handler(CommandHandler("confronta", confronta))
+    app.add_handler(CommandHandler("backtest", backtest_cmd))
+    app.add_handler(CommandHandler("grafico", grafico))
+    app.add_handler(CommandHandler("live", live))
+    app.add_handler(CommandHandler("stoplive", stoplive))
+    app.add_handler(CommandHandler("nukebomb", nukebomb))
+    app.add_handler(CommandHandler("avvisa", avvisa))
+    app.add_handler(CommandHandler("avvisi", avvisi))
+    app.add_handler(CommandHandler("disattiva", disattiva))
+    app.add_handler(CommandHandler("riepilogo", riepilogo))
+    app.add_handler(CommandHandler("lista", lista))
+    app.add_handler(CommandHandler("notizie", notizie_cmd))
+    app.add_handler(CommandHandler("analizza", analizza))
+    app.add_handler(CommandHandler("chat", chat_cmd))
+    app.add_handler(CommandHandler("stop", stop_cmd))
+    app.add_handler(CommandHandler("esci", stop_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    start_checker(app)
+    mode = "Groq-Llama3.3" if USE_GROQ else "Ollama"
+    print(f" Telegram Bot avviato su @oracle_fx_bot (AI: {mode})")
+    app.run_polling(drop_pending_updates=True)
 
 def run():
     start_bot()
