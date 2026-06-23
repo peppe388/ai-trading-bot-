@@ -5,6 +5,7 @@ __pycache__/
 bot/token.txt
 bot/config.json
 bot/auth.db
+bot/alerts.db
 bot/.distrutto
 *.keras
 charts/
@@ -13,3 +14,4 @@ portfolio.json
 .DS_Store
 *.log
 bot.zip
+bot-deploy.zip
