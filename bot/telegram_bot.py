@@ -93,7 +93,7 @@ def _groq_advice(asset_name, symbol, analysis, news_text=""):
         f"Analisi {asset_name}: segnale {verdict} "
         f"(segnale={signal}, conf={conf}%, "
         f"prezzo=${i['price']}, RSI={i['rsi']}, MACD={i['macd_status']}, "
-        f"trend={i['trend']}, ensemble={analysis['ensemble']['consensus']}/4). "
+        f"trend={i['trend']}, voto={analysis['ensemble']['votes']}). "
         f"{news_text} "
         f"Conferma o meno '{verdict}' e spiega perche'. "
         f"Termina con: DISCLAIMER: progetto educativo."
@@ -598,7 +598,7 @@ async def analizza(update, context):
             f"📈 Segnale: *{_esc(emoji_sig)}* (conf: {conf}%)",
             f"🎯 Target: ${tg:.2f} | 🛑 Stop: ${sl:.2f}",
             f"",
-            f"🧩 Ensemble: LSTM {e['lstm']:.2f} | TA {e['technical']:.2f} | Vol {e['volume']:.2f} | TF {e['multi_tf']:.2f}",
+            f"🧩 Confluenza: 🟢{e['votes']['buy']}  🔴{e['votes']['sell']}  ⚪{e['votes']['neutral']} esperti",
             f"📊 Accuratezza backtest: {acc}%" if acc else "",
         ]
         await status_msg.edit_text("\n".join(filter(None, lines)), parse_mode="Markdown")

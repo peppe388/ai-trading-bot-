@@ -118,54 +118,60 @@ def get_accuracy(symbol=None, n=30):
     return round(correct / len(hist) * 100, 1)
 
 
+def _expert_score(score):
+    if score > 0.25: return 1    # BUY vote
+    if score < -0.25: return -1  # SELL vote
+    return 0                     # NEUTRAL
+
 def analyse(df, lstm_prediction_pct):
     indicators = get_latest_indicators(df)
 
     has_lstm = lstm_prediction_pct != 0
     s_lstm = _lstm_score(lstm_prediction_pct) if has_lstm else 0
     w_lstm = _lstm_weight(lstm_prediction_pct) if has_lstm else 0
-
     s_ta = _ta_ensemble(indicators)
     s_vol = _volume_score(df)
     s_tf = _multi_tf_score(df)
 
-    adx = indicators.get("adx", 0)
-    in_trend = adx > 25
-    in_range = adx < 20
-    if in_trend:
-        w_ta, w_vol, w_tf = 0.45, 0.15, 0.20
-    elif in_range:
-        w_ta, w_vol, w_tf = 0.25, 0.15, 0.10
-    else:
-        w_ta, w_vol, w_tf = 0.35, 0.15, 0.15
+    # Expert votes: each component votes BUY(+1) SELL(-1) NEUTRAL(0)
+    votes = []
+    if has_lstm and w_lstm > 0:
+        votes.append(_expert_score(s_lstm))
+    votes.append(_expert_score(s_ta))
+    votes.append(_expert_score(s_vol))
+    votes.append(_expert_score(s_tf))
 
-    total = s_lstm * w_lstm + s_ta * w_ta + s_vol * w_vol + s_tf * w_tf
-    max_possible = w_lstm + w_ta + w_vol + w_tf
-    normalized = total / max_possible if max_possible > 0 else 0
+    n_votes = len(votes)
+    buys = sum(1 for v in votes if v == 1)
+    sells = sum(1 for v in votes if v == -1)
+    neutrals = n_votes - buys - sells
 
-    components = []
-    if has_lstm:
-        components.append(s_lstm > 0)
-    components.extend([s_ta > 0, s_vol > 0, s_tf > 0])
-    n_components = len(components)
-    consensus = sum(1 for s in components if s)
-    discord = n_components - consensus
-    adx_weak = 15 < adx < 25
-
-    if abs(normalized) < 0.15 or (consensus >= 1 and discord >= 1 and abs(normalized) < 0.3) or adx_weak:
-        signal = "HOLD"
-        confidence = max(15, int(abs(normalized) * 100))
-        if adx_weak:
-            confidence = max(10, confidence - 10)
-    elif normalized > 0.2:
+    # Confluence rules
+    if buys >= 3 and sells == 0:
         signal = "BUY"
-        confidence = min(85, int(abs(normalized) * 100))
-    elif normalized < -0.2:
+        pct = buys / n_votes
+    elif sells >= 3 and buys == 0:
         signal = "SELL"
-        confidence = min(85, int(abs(normalized) * 100))
+        pct = sells / n_votes
+    elif buys >= 2 and sells == 0:
+        signal = "BUY"
+        pct = 0.5
+    elif sells >= 2 and buys == 0:
+        signal = "SELL"
+        pct = 0.5
     else:
         signal = "HOLD"
-        confidence = max(15, int(abs(normalized) * 100))
+        pct = 0.3
+
+    # Confidence
+    if signal in ("BUY", "SELL"):
+        base = int(pct * 60 + 20)
+        adx = indicators.get("adx", 0)
+        if adx < 20:
+            base = max(20, base - 15)
+        confidence = min(base, 85)
+    else:
+        confidence = 20
 
     price = indicators["price"]
     support = indicators.get("support", 0)
@@ -179,18 +185,27 @@ def analyse(df, lstm_prediction_pct):
 
     accuracy = get_accuracy()
 
+    # Normalized scores for display (same scale as before)
+    n_lstm = round(float(s_lstm * w_lstm), 3) if has_lstm else 0
+    n_ta = round(float(s_ta * 0.35), 3)
+    n_vol = round(float(s_vol * 0.15), 3)
+    n_tf = round(float(s_tf * 0.15), 3)
+    denom = w_lstm + 0.35 + 0.15 + 0.15
+    total = round(float((n_lstm + n_ta + n_vol + n_tf) / denom if denom > 0 else 0), 3)
+
     return {
         "signal": signal,
-        "confidence": min(confidence, 85),
+        "confidence": confidence,
         "lstm_prediction_pct": lstm_prediction_pct,
         "indicators": indicators,
         "ensemble": {
-            "lstm": round(float(s_lstm * w_lstm), 3),
-            "technical": round(float(s_ta * w_ta), 3),
-            "volume": round(float(s_vol * w_vol), 3),
-            "multi_tf": round(float(s_tf * w_tf), 3),
-            "total": round(float(normalized), 3),
-            "consensus": consensus,
+            "lstm": n_lstm,
+            "technical": n_ta,
+            "volume": n_vol,
+            "multi_tf": n_tf,
+            "total": total,
+            "consensus": buys,
+            "votes": {"buy": buys, "sell": sells, "neutral": neutrals},
         },
         "stop_loss": stop_loss,
         "target": target,

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from data.market import fetch_data
 from data.indicators import add_indicators, get_latest_indicators
-from advisor.analyser import _ta_ensemble, _volume_score, _multi_tf_score
+from advisor.analyser import _ta_ensemble, _volume_score, _multi_tf_score, _expert_score
 
 
 def run_backtest(symbol, years=2):
@@ -23,13 +23,15 @@ def run_backtest(symbol, years=2):
         s_ta = _ta_ensemble(ind)
         s_vol = _volume_score(window)
         s_tf = _multi_tf_score(window)
-        score = s_ta * 0.35 + s_vol * 0.15 + s_tf * 0.15
-        norm = score / 0.65 if 0.65 > 0 else 0
+
+        votes = [_expert_score(s_ta), _expert_score(s_vol), _expert_score(s_tf)]
+        buys = sum(1 for v in votes if v == 1)
+        sells = sum(1 for v in votes if v == -1)
 
         signal = "HOLD"
-        if norm > 0.2:
+        if buys >= 2 and sells == 0:
             signal = "BUY"
-        elif norm < -0.2:
+        elif sells >= 2 and buys == 0:
             signal = "SELL"
 
         price = float(latest["Close"])
