@@ -1,9 +1,12 @@
 import yfinance as yf
 import pandas as pd
+import logging
 from datetime import datetime, timedelta
 import config
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
+_fetch_executor = ThreadPoolExecutor(max_workers=4)
 _cache = {}
 _cache_lock = threading.Lock()
 CACHE_DURATION = 3600
@@ -21,7 +24,15 @@ def fetch_data(symbol, days=730):
     end = now
     start = end - timedelta(days=days)
     try:
-        df = yf.download(symbol, start=start, end=end, progress=False)
+        future = _fetch_executor.submit(yf.download, symbol, start=start, end=end, progress=False)
+        df = future.result(timeout=30)
+    except TimeoutError:
+        logging.warning(f"yfinance timeout per {symbol}, riprovo...")
+        try:
+            future = _fetch_executor.submit(yf.download, symbol, start=start, end=end)
+            df = future.result(timeout=30)
+        except TimeoutError:
+            raise TimeoutError(f"yfinance non risponde per {symbol}")
     except TypeError:
         df = yf.download(symbol, start=start, end=end)
     if df.empty:
@@ -40,7 +51,10 @@ def fetch_data(symbol, days=730):
 
 def get_current_price(symbol):
     try:
-        data = yf.download(symbol, period="5d", progress=False)
+        future = _fetch_executor.submit(yf.download, symbol, period="5d", progress=False)
+        data = future.result(timeout=20)
+    except TimeoutError:
+        return None
     except TypeError:
         data = yf.download(symbol, period="5d")
     if data.empty:

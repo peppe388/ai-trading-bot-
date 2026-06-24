@@ -1,9 +1,13 @@
-import os, sys, json, logging, threading, sqlite3, asyncio
+import os, sys, json, logging, threading, sqlite3, asyncio, time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 if not TOKEN:
@@ -102,7 +106,7 @@ def _groq_advice(asset_name, symbol, analysis, news_text=""):
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7, max_tokens=512,
+            temperature=0.7, max_tokens=512, timeout=30,
         )
         return resp.choices[0].message.content
     except Exception:
@@ -121,7 +125,7 @@ def _groq_chat(message, history=None):
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            temperature=0.7, max_tokens=512,
+            temperature=0.7, max_tokens=512, timeout=30,
         )
         return resp.choices[0].message.content
     except Exception as e:
@@ -136,7 +140,7 @@ def _translate(text):
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": f"Traduci in italiano, mantieni il formato (titoli separati da -):\n{text}"}],
-            temperature=0.1, max_tokens=1024,
+            temperature=0.1, max_tokens=1024, timeout=30,
         )
         return resp.choices[0].message.content
     except Exception:
@@ -177,14 +181,32 @@ def _get_history(user_id):
         _chat_history[user_id] = []
     return _chat_history[user_id]
 
+_rate_limit = {}
+
+def _check_rate(cid, max_calls=15, window=60):
+    now = time.time()
+    if cid not in _rate_limit:
+        _rate_limit[cid] = []
+    _rate_limit[cid] = [t for t in _rate_limit[cid] if now - t < window]
+    if len(_rate_limit[cid]) >= max_calls:
+        return False
+    _rate_limit[cid].append(now)
+    return True
+
 def authorized(func):
     async def wrapper(update, context):
         uid = update.effective_user.id
         if uid not in AUTHORIZED_USERS:
             _load_auth()
             if uid not in AUTHORIZED_USERS:
+                logging.warning(f"Accesso negato: user_id={uid}")
                 await update.message.reply_text("Bot privato. Non sei autorizzato. Contatta l'admin.")
                 return
+        cid = update.effective_chat.id
+        if not _check_rate(cid):
+            logging.warning(f"Rate limit: chat_id={cid}, user_id={uid}")
+            await update.message.reply_text("⏳ Troppe richieste. Riprova tra 60 secondi.")
+            return
         return await func(update, context)
     return wrapper
 
@@ -470,8 +492,8 @@ async def avvisa(update, context):
         return
     target = context.args[-1]
     asset_text = " ".join(context.args[:-1])
-    if not target.replace(".", "").isdigit():
-        await update.message.reply_text("Il prezzo target non è valido.")
+    if not target.replace(".", "").isdigit() or float(target) <= 0:
+        await update.message.reply_text("Il prezzo target non è valido (deve essere > 0).")
         return
     try:
         label, symbol = resolve_symbol(asset_text)
