@@ -24,7 +24,10 @@ def _ensure_ollama():
         os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe"
     )
     if os.path.exists(ollama_path):
-        subprocess.Popen([ollama_path, "serve"], creationflags=subprocess.CREATE_NO_WINDOW)
+        kwargs = {}
+        if os.name == 'nt':
+            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        subprocess.Popen([ollama_path, "serve"], **kwargs)
         for _ in range(15):
             time.sleep(2)
             try:

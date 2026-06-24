@@ -58,7 +58,7 @@ def create_chart(symbol, label, days=90):
             figsize=(10, 6), tight_layout=True,
         )
         return tmp.name
-    except:
+    except Exception:
         try: os.unlink(tmp.name)
         except: pass
         return None
@@ -104,7 +104,7 @@ def create_live_chart(symbol, label):
             plot_df = df.tail(30).copy()
             timeframe = interval
             break
-        except:
+        except Exception:
             continue
     if plot_df is None:
         try:
@@ -115,7 +115,7 @@ def create_live_chart(symbol, label):
                 df.columns = [c[0] for c in df.columns]
             plot_df = df.tail(10).copy()
             timeframe = "daily"
-        except:
+        except Exception:
             return None
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
     try:
@@ -132,7 +132,7 @@ def create_live_chart(symbol, label):
                  savefig=dict(fname=tmp.name, dpi=120, facecolor=DARK_BG),
                  figsize=(9, 4), tight_layout=True)
         return tmp.name
-    except:
+    except Exception:
         try: os.unlink(tmp.name)
         except: pass
         return None

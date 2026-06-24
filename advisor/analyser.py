@@ -126,7 +126,7 @@ def _expert_score(score):
 def analyse(df, lstm_prediction_pct):
     indicators = get_latest_indicators(df)
 
-    has_lstm = lstm_prediction_pct != 0
+    has_lstm = lstm_prediction_pct is not None and lstm_prediction_pct != 0
     s_lstm = _lstm_score(lstm_prediction_pct) if has_lstm else 0
     w_lstm = _lstm_weight(lstm_prediction_pct) if has_lstm else 0
     s_ta = _ta_ensemble(indicators)
@@ -135,7 +135,7 @@ def analyse(df, lstm_prediction_pct):
 
     # Expert votes: each component votes BUY(+1) SELL(-1) NEUTRAL(0)
     votes = []
-    if has_lstm and w_lstm > 0:
+    if has_lstm:
         votes.append(_expert_score(s_lstm))
     votes.append(_expert_score(s_ta))
     votes.append(_expert_score(s_vol))
@@ -180,8 +180,13 @@ def analyse(df, lstm_prediction_pct):
         stop_loss = round(support, 2)
         target = round(resistance, 2)
     else:
-        stop_loss = round(price - 1.5 * indicators["atr"], 2) if indicators["atr"] else 0
-        target = round(price + 1.5 * indicators["atr"], 2) if indicators["atr"] else 0
+        atr = indicators.get("atr", 0)
+        if atr and not np.isnan(atr) and atr > 0:
+            stop_loss = round(price - 1.5 * atr, 2)
+            target = round(price + 1.5 * atr, 2)
+        else:
+            stop_loss = round(price * 0.97, 2)
+            target = round(price * 1.03, 2)
 
     accuracy = get_accuracy()
 

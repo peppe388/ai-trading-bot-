@@ -43,7 +43,7 @@ def start_checker(app):
     async def _notify(chat_id, text):
         try:
             await app.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
-        except:
+        except Exception:
             pass
     def _check():
         while True:
@@ -56,9 +56,9 @@ def start_checker(app):
                             text = f" Alert attivato!\n{row['label']} ha raggiunto ${price:.2f} (target: ${row['target_price']:.2f})"
                             app.create_task(_notify(row['chat_id'], text))
                             remove_alert(row['id'], row['user_id'])
-                    except:
+                    except Exception:
                         pass
-            except:
+            except Exception:
                 pass
             time.sleep(300)
     t = threading.Thread(target=_check, daemon=True)

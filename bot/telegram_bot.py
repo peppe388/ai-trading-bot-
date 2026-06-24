@@ -30,7 +30,7 @@ def _load_auth():
         for row in conn.execute("SELECT user_id FROM auth"):
             AUTHORIZED_USERS.add(row[0])
         conn.close()
-    except:
+    except Exception:
         pass
 
 def _add_user(user_id):
@@ -40,7 +40,7 @@ def _add_user(user_id):
         conn.execute("INSERT OR IGNORE INTO auth (user_id) VALUES (?)", (user_id,))
         conn.commit()
         conn.close()
-    except:
+    except Exception:
         pass
 
 def _del_user(user_id):
@@ -50,7 +50,7 @@ def _del_user(user_id):
         conn.execute("DELETE FROM auth WHERE user_id = ?", (user_id,))
         conn.commit()
         conn.close()
-    except:
+    except Exception:
         pass
 
 def _esc(text):
@@ -139,7 +139,7 @@ def _translate(text):
             temperature=0.1, max_tokens=1024,
         )
         return resp.choices[0].message.content
-    except:
+    except Exception:
         return text
 
 if GROQ_KEY:
@@ -156,14 +156,14 @@ def _get_analysis(symbol, label):
     prices = df["Close"].values[-30:].tolist()
     spk = _sparkline(prices, 8)
     ind = get_latest_indicators(df)
-    lstm_pred = 0
+    lstm_pred = None
     if not USE_GROQ:
         try:
             from models.trainer import train_model, predict
             model_trained, scaler_trained, _ = train_model(symbol)
             lstm_pred = predict(model_trained, scaler_trained, df)
             lstm_pred = round(float(lstm_pred), 2)
-        except:
+        except Exception:
             pass
     analysis = analyse(df, lstm_pred)
     return analysis, ind, spk
@@ -275,7 +275,7 @@ async def prezzo(update, context):
         return
     try:
         label, symbol = resolve_symbol(" ".join(context.args))
-    except:
+    except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
     await update.message.reply_text(f"🔍 Cerco {_esc(label)}...")
@@ -325,7 +325,7 @@ async def top_flop(update, context):
             if len(df) >= 3:
                 chg = (float(df["Close"].iloc[-1]) / float(df["Close"].iloc[0]) - 1) * 100
                 results.append((chg, name))
-        except:
+        except Exception:
             pass
     results.sort(reverse=True)
     items = results[:5] if is_top else results[-5:]
@@ -345,7 +345,7 @@ async def confronta(update, context):
     try:
         l1, s1 = resolve_symbol(args[0])
         l2, s2 = resolve_symbol(args[1])
-    except:
+    except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
     await update.message.reply_text(f"⏳ Confronto {_esc(l1)} vs {_esc(l2)}...")
@@ -383,7 +383,7 @@ async def backtest_cmd(update, context):
         return
     try:
         label, symbol = resolve_symbol(" ".join(context.args))
-    except:
+    except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
     await update.message.reply_text(f"⏳ Backtest {_esc(label)} su 2 anni...")
@@ -403,7 +403,7 @@ async def grafico(update, context):
         return
     try:
         label, symbol = resolve_symbol(" ".join(context.args))
-    except:
+    except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
     await update.message.reply_text(f"📈 Genero grafico intraday per {_esc(label)}...")
@@ -426,7 +426,7 @@ async def live(update, context):
         return
     try:
         label, symbol = resolve_symbol(" ".join(context.args))
-    except:
+    except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
     msg = await update.message.reply_text(f"📊 Live {_esc(label)} — `/stoplive` per fermare, si aggiorna ogni 10s", parse_mode="Markdown")
@@ -475,7 +475,7 @@ async def avvisa(update, context):
         return
     try:
         label, symbol = resolve_symbol(asset_text)
-    except:
+    except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
     target_price = float(target)
@@ -518,7 +518,7 @@ async def riepilogo(update, context):
                 chg = (float(df["Close"].iloc[-1]) / float(df["Close"].iloc[-2]) - 1) * 100
                 price = float(df["Close"].iloc[-1])
                 results.append((name, price, chg))
-        except:
+        except Exception:
             pass
     lines = ["📊 *Riepilogo Mercati:*\n"]
     for name, price, chg in results:
@@ -558,7 +558,7 @@ async def notizie_cmd(update, context):
                 await update.message.reply_text(f"📰 *Notizie per {label}:*\n{translated}", parse_mode="Markdown")
             else:
                 await update.message.reply_text(f"❌ Nessuna notizia per {label}.")
-        except:
+        except Exception:
             await update.message.reply_text(f"❌ Asset '{text}' non trovato.")
     else:
         msg = format_news()
@@ -573,7 +573,7 @@ async def analizza(update, context):
     await update.message.reply_text(f"🔍 Cerco {_esc(text)}...")
     try:
         label, symbol = resolve_symbol(text)
-    except:
+    except Exception:
         await update.message.reply_text(f"❌ Asset '{text}' non trovato.")
         return
     status_msg = await update.message.reply_text(f"⏳ Analisi {label} in corso...")

@@ -13,6 +13,7 @@ def run_backtest(symbol, years=2):
 
     capital = 10000
     position = 0
+    position_cost = 0
     trades = []
     equity = []
 
@@ -36,16 +37,17 @@ def run_backtest(symbol, years=2):
 
         price = float(latest["Close"])
         if signal == "BUY" and position == 0:
+            position_cost = capital
             position = capital / price
             capital = 0
             trades.append({"date": latest.name, "type": "BUY", "price": price, "qty": position})
         elif signal == "SELL" and position > 0:
             proceeds = position * price
-            buy_cost = sum(t["qty"] * t["price"] for t in trades if t["type"] == "BUY")
-            pnl = proceeds - buy_cost
+            pnl = proceeds - position_cost
             trades.append({"date": latest.name, "type": "SELL", "price": price, "qty": position, "pnl": round(pnl, 2)})
             capital = proceeds
             position = 0
+            position_cost = 0
 
         equity.append({"date": latest.name, "value": capital + position * price})
 

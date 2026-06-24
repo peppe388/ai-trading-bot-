@@ -2,18 +2,21 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import config
+import threading
 
 _cache = {}
+_cache_lock = threading.Lock()
 CACHE_DURATION = 3600
 
 
 def fetch_data(symbol, days=730):
     key = f"{symbol}_{days}"
     now = datetime.now()
-    if key in _cache:
-        entry = _cache[key]
-        if (now - entry["ts"]).total_seconds() < CACHE_DURATION:
-            return entry["data"].copy()
+    with _cache_lock:
+        if key in _cache:
+            entry = _cache[key]
+            if (now - entry["ts"]).total_seconds() < CACHE_DURATION:
+                return entry["data"].copy()
 
     end = now
     start = end - timedelta(days=days)
@@ -30,7 +33,8 @@ def fetch_data(symbol, days=730):
     if outlier_mask.any():
         df = df[~outlier_mask].copy()
 
-    _cache[key] = {"data": df.copy(), "ts": now}
+    with _cache_lock:
+        _cache[key] = {"data": df.copy(), "ts": now}
     return df
 
 
@@ -75,7 +79,8 @@ def get_news_text(symbol):
 
 
 def clear_cache():
-    _cache.clear()
+    with _cache_lock:
+        _cache.clear()
 
 
 def get_asset_name(symbol):
