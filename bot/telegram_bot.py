@@ -61,7 +61,7 @@ _load_auth()
 from data.market import fetch_data, resolve_symbol, get_news_text, get_asset_name, get_current_price
 from data.indicators import add_indicators, get_latest_indicators
 from advisor.analyser import analyse
-from data.chart import create_chart, create_comparison, create_live_chart, CHART_ENABLED
+from data.chart import create_comparison, create_live_chart, CHART_ENABLED
 from data.alerts import add_alert, remove_alert, get_user_alerts, start_checker
 from advisor.backtest import run_backtest, format_backtest
 from config import FOREX_PAIRS, STOCKS, COMMODITIES, CRYPTO
@@ -441,11 +441,7 @@ async def live(update, context):
         try:
             chart = create_live_chart(symbol, f"{label}")
             if not chart:
-                await msg.edit_text(f"❌ Errore grafico #{i+1}, passo a daily...")
-                chart = create_chart(symbol, f"{label}", 90)
-                if not chart:
-                    await msg.edit_text(f"❌ Errore grafico #{i+1}")
-                    break
+                await msg.edit_text(f"❌ Errore grafico #{i+1}")
             price = get_current_price(symbol) or 0
             caption = f"📊 {_esc(label)} — Live {i+1}/12 — ${price:.2f}"
             if photo_msg:

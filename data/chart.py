@@ -89,10 +89,11 @@ def create_comparison(sym1, sym2, label1, label2, days=90):
     return tmp.name
 
 def create_live_chart(symbol, label):
+    """Intraday chart (1m/15m) with daily fallback. Always fresh."""
     if not CHART_ENABLED:
         return None
     plot_df = None
-    tried = ""
+    timeframe = ""
     for period, interval in [("1d", "1m"), ("5d", "15m")]:
         try:
             df = yf.download(symbol, period=period, interval=interval, progress=False)
@@ -101,12 +102,21 @@ def create_live_chart(symbol, label):
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = [c[0] for c in df.columns]
             plot_df = df.tail(30).copy()
-            tried = interval
+            timeframe = interval
             break
         except:
             continue
     if plot_df is None:
-        return None
+        try:
+            df = yf.download(symbol, period="7d", interval="1d", progress=False)
+            if df.empty or len(df) < 3:
+                return None
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [c[0] for c in df.columns]
+            plot_df = df.tail(10).copy()
+            timeframe = "daily"
+        except:
+            return None
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
     try:
         mc = mpf.make_marketcolors(up=GREEN, down=RED, edge='inherit', wick='inherit', volume=DARK_GRID)
@@ -118,7 +128,7 @@ def create_live_chart(symbol, label):
                 'ytick.color': 'white'}
         )
         mpf.plot(plot_df, type='candle', style=style, volume=False,
-                 title=f'{label} ({tried})', ylabel='$',
+                 title=f'{label} ({timeframe})', ylabel='$',
                  savefig=dict(fname=tmp.name, dpi=120, facecolor=DARK_BG),
                  figsize=(9, 4), tight_layout=True)
         return tmp.name
