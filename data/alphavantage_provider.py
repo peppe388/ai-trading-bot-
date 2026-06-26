@@ -6,6 +6,12 @@ API_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "")
 BASE = "https://www.alphavantage.co/query"
 _log = logging.getLogger(__name__)
 
+# Yahoo ETF → (codice fisico, nome) per CURRENCY_EXCHANGE_RATE
+COMMODITY_SPOT = {
+    "GLD": ("XAU", "USD", "Oro spot"),
+    "SLV": ("XAG", "USD", "Argento spot"),
+}
+
 
 def _parse_yahoo_forex(symbol):
     """EURUSD=X → (EUR, USD). Restituisce None se non è forex."""
@@ -18,11 +24,17 @@ def _parse_yahoo_forex(symbol):
 
 
 def get_price(symbol):
-    """Prezzo real-time forex via Alpha Vantage."""
-    pair = _parse_yahoo_forex(symbol)
-    if not pair:
-        return None
+    """Prezzo real-time forex e commodities spot via Alpha Vantage."""
     if not API_KEY:
+        return None
+    pair = None
+    if symbol.endswith("=X"):
+        p = _parse_yahoo_forex(symbol)
+        if p:
+            pair = p
+    elif symbol in COMMODITY_SPOT:
+        pair = COMMODITY_SPOT[symbol][:2]
+    if not pair:
         return None
     from_c, to_c = pair
     try:
@@ -46,11 +58,13 @@ def get_price(symbol):
 
 def get_bars(symbol, interval="1min", limit=30):
     """Candele intraday forex via Alpha Vantage."""
+    if not API_KEY:
+        return None
     pair = _parse_yahoo_forex(symbol)
     if not pair:
         return None
-    if not API_KEY:
-        return None
+    if symbol in COMMODITY_SPOT:
+        return None  # Alpha Vantage free non dà candele intraday per XAU
     from_c, to_c = pair
     av_interval = interval.replace("m", "min").replace("h", "min")
     if av_interval not in ("1min", "5min", "15min", "30min", "60min"):

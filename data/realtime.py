@@ -2,6 +2,7 @@ import data.binance_provider as binance
 import data.alphavantage_provider as alphav
 
 CRYPTO_SYMBOLS = {"BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"}
+COMMODITY_SYMBOLS = {"GLD", "SLV"}
 
 
 def _is_forex(symbol):
@@ -13,7 +14,7 @@ def get_price(symbol):
         p = binance.get_price(symbol)
         if p is not None:
             return p
-    if _is_forex(symbol):
+    if _is_forex(symbol) or symbol in COMMODITY_SYMBOLS:
         p = alphav.get_price(symbol)
         if p is not None:
             return p
@@ -21,13 +22,12 @@ def get_price(symbol):
 
 
 def get_bars(symbol, interval="1m", limit=30):
-    av_interval = interval
     if symbol in CRYPTO_SYMBOLS:
         df = binance.get_bars(symbol, interval=interval, limit=limit)
         if df is not None:
             return df
     if _is_forex(symbol):
-        df = alphav.get_bars(symbol, interval=av_interval, limit=limit)
+        df = alphav.get_bars(symbol, interval=interval, limit=limit)
         if df is not None:
             return df
     return None
