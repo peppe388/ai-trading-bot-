@@ -90,22 +90,25 @@ def create_comparison(sym1, sym2, label1, label2, days=90):
     return tmp.name
 
 def create_live_chart(symbol, label):
-    """Intraday chart (1m/15m freshest available) with daily fallback."""
+    """Intraday chart (1m/15m) with daily fallback. Filtra solo candele di oggi."""
     if not CHART_ENABLED:
         return None
     plot_df = None
     timeframe = ""
-    today = datetime.now(timezone.utc).date()
-    for period, interval in [("1d", "1m"), ("5d", "15m")]:
+    today_utc = pd.Timestamp.now(tz='UTC').date()
+    for period, interval in [("2d", "1m"), ("1d", "1m"), ("5d", "15m")]:
         try:
             df = yf.download(symbol, period=period, interval=interval, progress=False)
             if df.empty or len(df) < 5:
                 continue
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = [c[0] for c in df.columns]
-            df_today = df[df.index.date == today]
+            df.index = pd.to_datetime(df.index)
+            if df.index.tz is None:
+                df.index = df.index.tz_localize('UTC')
+            df_today = df[df.index.date == today_utc]
             if df_today.empty:
-                df_today = df.tail(30)
+                continue
             plot_df = df_today.tail(30).copy()
             timeframe = interval
             break
