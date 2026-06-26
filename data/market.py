@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import config
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import data.realtime as realtime
 
 _fetch_executor = ThreadPoolExecutor(max_workers=4)
 _cache = {}
@@ -50,6 +51,9 @@ def fetch_data(symbol, days=730):
 
 
 def get_current_price(symbol):
+    rt = realtime.get_price(symbol)
+    if rt is not None:
+        return rt
     try:
         future = _fetch_executor.submit(yf.download, symbol, period="5d", progress=False)
         data = future.result(timeout=20)

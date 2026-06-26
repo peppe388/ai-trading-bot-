@@ -1,7 +1,8 @@
 import os, tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 import pandas as pd
 import yfinance as yf
+import data.realtime as realtime
 from data.market import fetch_data
 
 CHART_ENABLED = False
@@ -90,26 +91,22 @@ def create_comparison(sym1, sym2, label1, label2, days=90):
     return tmp.name
 
 def create_live_chart(symbol, label):
-    """Intraday chart (1m/15m) with daily fallback. Filtra solo candele di oggi."""
+    """Intraday chart: Binance per crypto, yfinance per resto. Mostra timestamp."""
     if not CHART_ENABLED:
         return None
     plot_df = None
     timeframe = ""
-    today_utc = pd.Timestamp.now(tz='UTC').date()
-    for period, interval in [("2d", "1m"), ("1d", "1m"), ("5d", "15m")]:
+    interval_map = {"1m": "1m", "15m": "15m"}
+    for interval in ["1m", "15m"]:
         try:
-            df = yf.download(symbol, period=period, interval=interval, progress=False)
+            df = realtime.get_bars(symbol, interval=interval, limit=30)
+            if df is None:
+                df = yf.download(symbol, period="5d", interval=interval, progress=False)
             if df.empty or len(df) < 5:
                 continue
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = [c[0] for c in df.columns]
-            df.index = pd.to_datetime(df.index)
-            if df.index.tz is None:
-                df.index = df.index.tz_localize('UTC')
-            df_today = df[df.index.date == today_utc]
-            if df_today.empty:
-                continue
-            plot_df = df_today.tail(30).copy()
+            plot_df = df.tail(30).copy()
             timeframe = interval
             break
         except Exception:
@@ -138,7 +135,8 @@ def create_live_chart(symbol, label):
         last_time = ""
         try:
             last_dt = plot_df.index[-1]
-            last_time = f" — Ultimo: {last_dt.strftime('%H:%M')}" if hasattr(last_dt, 'strftime') else ""
+            if hasattr(last_dt, 'strftime'):
+                last_time = f" \u2014 {last_dt.strftime('%d/%m %H:%M')}" if timeframe != "daily" else ""
         except Exception:
             pass
         mpf.plot(plot_df, type='candle', style=style, volume=False,
