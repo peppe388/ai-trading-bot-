@@ -160,10 +160,6 @@ def _get_analysis(symbol, label):
     prices = df["Close"].values[-30:].tolist()
     spk = _sparkline(prices, 8)
     ind = get_latest_indicators(df)
-    rt = get_current_price(symbol)
-    if rt is not None:
-        ind["price"] = rt
-        ind["price_change_pct"] = round((rt / df["Close"].iloc[-2] - 1) * 100, 2)
     lstm_pred = None
     if not USE_GROQ:
         try:
@@ -174,7 +170,8 @@ def _get_analysis(symbol, label):
         except Exception:
             pass
     analysis = analyse(df, lstm_pred)
-    return analysis, ind, spk
+    live_price = get_current_price(symbol)
+    return analysis, ind, spk, live_price
 
 _chat_history = {}
 _chat_mode = set()
@@ -605,7 +602,7 @@ async def analizza(update, context):
         return
     status_msg = await update.message.reply_text(f"⏳ Analisi {label} in corso...")
     try:
-        analysis, ind, spk = _get_analysis(symbol, label)
+        analysis, ind, spk, live_price = _get_analysis(symbol, label)
         sig = analysis["signal"]
         conf = analysis["confidence"]
         sl = analysis["stop_loss"]
@@ -613,8 +610,9 @@ async def analizza(update, context):
         acc = analysis["backtest_accuracy"]
         e = analysis["ensemble"]
         emoji_sig = {"BUY": "🟢 ACQUISTA", "SELL": "🔴 VENDI", "HOLD": "🟡 MANTIENI"}.get(sig, sig)
+        display_price = live_price or ind['price']
         lines = [
-            f"📊 *{_esc(label)}* — ${ind['price']:.2f}",
+            f"📊 *{_esc(label)}* — ${display_price:.2f}",
             f"📉 Trend: `{_esc(spk)}` | RSI {ind['rsi']} | MACD {_esc(ind['macd_status'])}",
             f"📊 Stoccastico: {ind.get('stoch', 'N/A')} | OBV: {_esc(ind.get('obv_trend', 'N/A'))}",
             f"",
@@ -653,7 +651,7 @@ async def facile_cmd(update, context):
         return
     status_msg = await update.message.reply_text(f"⏳ Analisi facile {label} in corso...")
     try:
-        analysis, ind, spk = _get_analysis(symbol, label)
+        analysis, ind, spk, live_price = _get_analysis(symbol, label)
         sig = analysis["signal"]
         conf = analysis["confidence"]
         sl = analysis["stop_loss"]
@@ -667,8 +665,9 @@ async def facile_cmd(update, context):
         }
         reason = reason_map.get(sig, "")
         adx_label = f"Mercato in tendenza (ADX {adx_val:.0f})" if adx_val > 25 else f"Mercato laterale (ADX {adx_val:.0f})"
+        display_price = live_price or ind['price']
         lines = [
-            f"📊 *{_esc(label)}* — ${ind['price']:.2f}",
+            f"📊 *{_esc(label)}* — ${display_price:.2f}",
             f"",
             f"📈 Segnale: *{_esc(emoji_sig)}* (confidenza {conf}%)",
             f"🎯 Obiettivo: ${tg:.2f}",

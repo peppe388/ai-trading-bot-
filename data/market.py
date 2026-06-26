@@ -10,7 +10,7 @@ import data.realtime as realtime
 _fetch_executor = ThreadPoolExecutor(max_workers=4)
 _cache = {}
 _cache_lock = threading.Lock()
-CACHE_DURATION = 3600
+CACHE_DURATION = 300
 
 
 def fetch_data(symbol, days=730):
