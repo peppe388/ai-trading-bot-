@@ -160,6 +160,10 @@ def _get_analysis(symbol, label):
     prices = df["Close"].values[-30:].tolist()
     spk = _sparkline(prices, 8)
     ind = get_latest_indicators(df)
+    rt = get_current_price(symbol)
+    if rt is not None:
+        ind["price"] = rt
+        ind["price_change_pct"] = round((rt / df["Close"].iloc[-2] - 1) * 100, 2)
     lstm_pred = None
     if not USE_GROQ:
         try:
