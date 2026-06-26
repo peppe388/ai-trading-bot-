@@ -1,4 +1,5 @@
 import os, tempfile
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 import yfinance as yf
 from data.market import fetch_data
@@ -89,11 +90,12 @@ def create_comparison(sym1, sym2, label1, label2, days=90):
     return tmp.name
 
 def create_live_chart(symbol, label):
-    """Intraday chart (1m/15m) with daily fallback. Always fresh."""
+    """Intraday chart (1m/15m freshest available) with daily fallback."""
     if not CHART_ENABLED:
         return None
     plot_df = None
     timeframe = ""
+    today = datetime.now(timezone.utc).date()
     for period, interval in [("1d", "1m"), ("5d", "15m")]:
         try:
             df = yf.download(symbol, period=period, interval=interval, progress=False)
@@ -101,7 +103,10 @@ def create_live_chart(symbol, label):
                 continue
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = [c[0] for c in df.columns]
-            plot_df = df.tail(30).copy()
+            df_today = df[df.index.date == today]
+            if df_today.empty:
+                df_today = df.tail(30)
+            plot_df = df_today.tail(30).copy()
             timeframe = interval
             break
         except Exception:
@@ -127,8 +132,14 @@ def create_live_chart(symbol, label):
                 'axes.edgecolor': '#555', 'xtick.color': 'white',
                 'ytick.color': 'white'}
         )
+        last_time = ""
+        try:
+            last_dt = plot_df.index[-1]
+            last_time = f" — Ultimo: {last_dt.strftime('%H:%M')}" if hasattr(last_dt, 'strftime') else ""
+        except Exception:
+            pass
         mpf.plot(plot_df, type='candle', style=style, volume=False,
-                 title=f'{label} ({timeframe})', ylabel='$',
+                 title=f'{label} ({timeframe}){last_time}', ylabel='$',
                  savefig=dict(fname=tmp.name, dpi=120, facecolor=DARK_BG),
                  figsize=(9, 4), tight_layout=True)
         return tmp.name
