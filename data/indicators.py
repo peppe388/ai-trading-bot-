@@ -55,7 +55,7 @@ def get_latest_indicators(df):
     rsi_signal = "ipercomprato" if rsi_val > 70 else "ipervenduto" if rsi_val < 30 else "neutrale"
 
     macd_bullish = last["macd"] > last["macd_signal"]
-    macd_status = "bullish" if macd_bullish else "bearish"
+    macd_status = "rialzista" if macd_bullish else "ribassista"
 
     stoch_val = last["stoch_k"]
     stoch_signal = "ipercomprato" if stoch_val > 80 else "ipervenduto" if stoch_val < 20 else "neutrale"
@@ -73,7 +73,7 @@ def get_latest_indicators(df):
     price_change = ((last["Close"] - prev["Close"]) / prev["Close"]) * 100
 
     adx_val = last["adx"]
-    adx_signal = "trend" if adx_val > 25 else "range" if adx_val < 20 else "debole"
+    adx_signal = "tendenza" if adx_val > 25 else "laterale" if adx_val < 20 else "debole"
 
     window_high = df["High"].rolling(20).max()
     window_low = df["Low"].rolling(20).min()

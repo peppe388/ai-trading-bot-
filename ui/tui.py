@@ -276,7 +276,7 @@ class TradingTUI:
         table.add_column("Prezzo", justify="right")
         table.add_column("Stato")
         for cat, pairs in [("Forex", config.FOREX_PAIRS), ("Azioni", config.STOCKS),
-                           ("Commodities", config.COMMODITIES), ("Crypto", config.CRYPTO)]:
+                           ("Materie Prime", config.COMMODITIES), ("Criptovalute", config.CRYPTO)]:
             for lb, sym in pairs.items():
                 info = self.asset_cache.get(sym, {})
                 sig = info.get("signal")
@@ -297,9 +297,9 @@ class TradingTUI:
         ret_color = "green" if r["total_return"] >= 0 else "red"
         t.add_row("Simbolo", r["symbol"])
         t.add_row("Rendimento", f"[bold {ret_color}]{r['total_return']:+.2f}%[/]")
-        t.add_row("Operazioni vincenti", f"{r['win_rate']}% ({r['num_trades']} trades)")
-        t.add_row("Max Drawdown", f"[red]{r['max_drawdown']:.2f}%[/]")
-        t.add_row("Sharpe Ratio", f"{'[green]' if r['sharpe_ratio'] >= 1 else '[yellow]'}{r['sharpe_ratio']}[/]")
+        t.add_row("Operazioni vincenti", f"{r['win_rate']}% ({r['num_trades']} scambi)")
+        t.add_row("Ribasso Massimo", f"[red]{r['max_drawdown']:.2f}%[/]")
+        t.add_row("Indice di Sharpe", f"{'[green]' if r['sharpe_ratio'] >= 1 else '[yellow]'}{r['sharpe_ratio']}[/]")
         t.add_row("Capitale finale", f"${r['final_capital']:.2f}")
         return Panel(t, box=box.HEAVY, border_style="cyan", title="  BACKTEST  ", title_align="center")
 
@@ -337,7 +337,7 @@ class TradingTUI:
         return Panel(
             "[bold cyan][1][/] Dashboard  [bold cyan][2][/] Chat  [bold cyan][3][/] Assets  "
             "[bold cyan][4][/] Backtest  [bold cyan][5][/] Notizie  "
-            "[bold yellow]q[/]=quit  [bold yellow]h[/]=help",
+            "[bold yellow]q[/]=esci  [bold yellow]h[/]=help",
             style="dim white", box=box.SQUARE, padding=(0, 1),
         )
 
@@ -373,8 +373,8 @@ class TradingTUI:
         t.add_row("Ensemble", f"{result['ensemble']['consensus']}/4")
         t.add_row("Stop Loss", f"${result['stop_loss']}")
         t.add_row("Target", f"${result['target']}")
-        t.add_row("Backtest Acc", f"{result.get('backtest_accuracy', '?')}%")
-        t.add_row("VERDETTO", f"[{'green' if inv == 'INVESTI' else 'red'}][bold]{inv}[/bold][/] (conf: {conf}%)")
+        t.add_row("Accuratezza Test", f"{result.get('backtest_accuracy', '?')}%")
+        t.add_row("VERDETTO", f"[{'green' if inv == 'INVESTI' else 'red'}][bold]{inv}[/bold][/] (confidenza: {conf}%)")
         console.print(Panel(t, box=box.HEAVY, border_style="cyan", title=f"  {ld}  ", title_align="center"))
         if news_text:
             console.print(Panel(Text(news_text, style="cyan"), box=box.SIMPLE, border_style="cyan",

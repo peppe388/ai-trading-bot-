@@ -46,7 +46,7 @@ def print_header():
     print(f"{N}")
     print("  EUR/USD, oro, TSLA, BTC  -> analisi INVESTI/NON INVESTIRE")
     print("  Domande generiche        -> chat AI libera")
-    print("  'exit' per uscire\n")
+    print("  'esci' per uscire\n")
 
 
 def handle_asset(msg):
@@ -74,12 +74,12 @@ def handle_asset(msg):
     inv = "INVESTI" if sig == "BUY" and analysis["confidence"] >= 50 else "NON INVESTIRE"
     print(f"  RSI: {i['rsi']} ({i['rsi_signal']})    | MACD: {i['macd_status']}")
     print(f"  Stoc: {i['stoch']}    | OBV: {i['obv_trend']}")
-    print(f"  AI pred: {analysis['lstm_prediction_pct']}%     | Ensemble: {e['consensus']}/4")
-    print(f"  AI acc: {i['trend']}")
+    print(f"  Predizione AI: {analysis['lstm_prediction_pct']}%     | Insieme: {e['consensus']}/4")
+    print(f"  Andamento: {i['trend']}")
     print(f"  {'-'*40}")
-    print(f"  {inv} (conf: {analysis['confidence']}%)", end="")
-    if acc: print(f"  |  Backtest: {acc}%", end="")
-    print(f"\n  Stop: ${analysis['stop_loss']}  |  Target: ${analysis['target']}\n")
+    print(f"  {inv} (confidenza: {analysis['confidence']}%)", end="")
+    if acc: print(f"  |  Test storico: {acc}%", end="")
+    print(f"\n  Stop Loss: ${analysis['stop_loss']}  |  Obiettivo: ${analysis['target']}\n")
 
     print(f"  {C}Notizie recenti:{N}")
     news = get_news_text(symbol)

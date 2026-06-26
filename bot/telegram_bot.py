@@ -100,7 +100,7 @@ def _groq_advice(asset_name, symbol, analysis, news_text=""):
         f"trend={i['trend']}, voto={analysis['ensemble']['votes']}). "
         f"{news_text} "
         f"Conferma o meno '{verdict}' e spiega perche'. "
-        f"Termina con: DISCLAIMER: progetto educativo."
+        f"Termina con: Avvertenza: progetto educativo."
     )
     try:
         resp = client.chat.completions.create(
@@ -110,7 +110,7 @@ def _groq_advice(asset_name, symbol, analysis, news_text=""):
         )
         return resp.choices[0].message.content
     except Exception:
-        return f"{verdict} (conf: {conf}%) | {asset_name} a ${i['price']}, trend {i['trend']}. DISCLAIMER: progetto educativo"
+        return f"{verdict} (conf: {conf}%) | {asset_name} a ${i['price']}, trend {i['trend']}. Avvertenza: progetto educativo"
 
 def _groq_chat(message, history=None):
     from groq import Groq
@@ -200,11 +200,11 @@ def authorized(func):
             _load_auth()
             if uid not in AUTHORIZED_USERS:
                 logging.warning(f"Accesso negato: user_id={uid}")
-                await update.message.reply_text("Bot privato. Non sei autorizzato. Contatta l'admin.")
+                await update.message.reply_text("Bot privato. Non sei autorizzato. Contatta l'amministratore.")
                 return
         cid = update.effective_chat.id
         if not _check_rate(cid):
-            logging.warning(f"Rate limit: chat_id={cid}, user_id={uid}")
+            logging.warning(f"Limite richieste: chat_id={cid}, user_id={uid}")
             await update.message.reply_text("⏳ Troppe richieste. Riprova tra 60 secondi.")
             return
         return await func(update, context)
@@ -212,7 +212,7 @@ def authorized(func):
 
 def format_asset_list():
     lines = ["📋 *Asset disponibili:*\n"]
-    for cat, items in [("💶 Forex", FOREX_PAIRS), ("📈 Stocks", STOCKS), ("🏅 Commodities", COMMODITIES), ("₿ Crypto", CRYPTO)]:
+    for cat, items in [("💶 Forex", FOREX_PAIRS), ("📈 Azioni", STOCKS), ("🏅 Materie Prime", COMMODITIES), ("₿ Criptovalute", CRYPTO)]:
         names = "\n".join(f"  • `{n}`" for n in items)
         lines.append(f"*{cat}*\n{names}\n")
     return "\n".join(lines)
@@ -244,11 +244,12 @@ async def start(update, context):
             f"`/lista` - Asset disponibili\n"
             f"`/prezzo <nome>` - Prezzo in tempo reale\n"
             f"`/grafico <nome>` - Grafico candlestick\n"
-            f"`/live <nome>` - Grafico live 2 min\n"
-            f"`/stoplive` - Ferma il live\n"
+            f"`/live <nome>` - Grafico in diretta 2 min\n"
+            f"`/stoplive` - Ferma la diretta\n"
             f"`/analizza <nome>` - Analisi completa\n"
             f"`/confronta <a1> <a2>` - Confronto due asset\n"
-            f"`/backtest <nome>` - Backtest 2 anni\n"
+            f"`/backtest <nome>` - Test storico 2 anni\n"
+            f"`/facile <nome>` - Analisi semplificata\n"
             f"`/top` - I migliori\n"
             f"`/flop` - I peggiori\n"
             f"`/riepilogo` - Riepilogo mercati\n"
@@ -263,7 +264,7 @@ async def start(update, context):
     else:
         await update.message.reply_text(
             "🤖 Bot privato.\n"
-            "Se non sei autorizzato, contatta l'admin."
+            "Se non sei autorizzato, contatta l'amministratore."
         )
 
 async def aggiungi(update, context):
@@ -326,7 +327,7 @@ async def status_cmd(update, context):
     uptime_str = f"{d}g {h}h {m}m"
     lines = [
         "🤖 *Stato Bot*",
-        f"📅 Uptime: {uptime_str}",
+        f"📅 Attivo da: {uptime_str}",
         f"👥 Utenti autorizzati: {len(AUTHORIZED_USERS)}",
         f"📡 AI: {'Groq' if USE_GROQ else 'Ollama'}",
         f"📊 Asset: {len(ALL_ASSETS)}",
@@ -351,7 +352,7 @@ async def top_flop(update, context):
             pass
     results.sort(reverse=True)
     items = results[:5] if is_top else results[-5:]
-    label = "🏆 *TOP 5*" if is_top else "🍂 *FLOP 5*"
+    label = "🏆 *MIGLIORI 5*" if is_top else "🍂 *PEGGIORI 5*"
     lines = [f"{label} performance:\n"]
     for chg, name in items:
         arrow = "📈" if chg > 0 else "📉"
@@ -401,19 +402,19 @@ async def confronta(update, context):
 @authorized
 async def backtest_cmd(update, context):
     if not context.args:
-        await update.message.reply_text("Usa: `/backtest NVDA` o `/backtest oro`", parse_mode="Markdown")
+        await update.message.reply_text("Usa: `/test NVDA` o `/test oro`", parse_mode="Markdown")
         return
     try:
         label, symbol = resolve_symbol(" ".join(context.args))
     except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    await update.message.reply_text(f"⏳ Backtest {_esc(label)} su 2 anni...")
+    await update.message.reply_text(f"⏳ Test storico {_esc(label)} su 2 anni...")
     try:
         result = run_backtest(symbol, 2)
-        await update.message.reply_text(f"📊 *Backtest {_esc(label)}*\n```\n{format_backtest(result)}\n```", parse_mode="Markdown")
+        await update.message.reply_text(f"📊 *Test storico {_esc(label)}*\n```\n{format_backtest(result)}\n```", parse_mode="Markdown")
     except Exception as e:
-        await update.message.reply_text(f"❌ Errore backtest: {str(e)[:200]}")
+        await update.message.reply_text(f"❌ Errore test storico: {str(e)[:200]}")
 
 @authorized
 async def grafico(update, context):
@@ -428,10 +429,10 @@ async def grafico(update, context):
     except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    await update.message.reply_text(f"📈 Genero grafico intraday per {_esc(label)}...")
+    await update.message.reply_text(f"📈 Genero grafico infragiornaliero per {_esc(label)}...")
     chart = create_live_chart(symbol, label)
     if not chart:
-        await update.message.reply_text("❌ Impossibile generare il grafico intraday.")
+        await update.message.reply_text("❌ Impossibile generare il grafico infragiornaliero.")
         return
     price = get_current_price(symbol) or 0
     with open(chart, "rb") as f:
@@ -451,7 +452,7 @@ async def live(update, context):
     except Exception:
         await update.message.reply_text("❌ Asset non trovato.")
         return
-    msg = await update.message.reply_text(f"📊 Live {_esc(label)} — `/stoplive` per fermare, si aggiorna ogni 10s", parse_mode="Markdown")
+    msg = await update.message.reply_text(f"📊 Diretta {_esc(label)} — `/stoplive` per fermare, si aggiorna ogni 10s", parse_mode="Markdown")
     cid = update.effective_chat.id
     _live_streams[cid] = True
     stopped = False
@@ -465,7 +466,7 @@ async def live(update, context):
             if not chart:
                 await msg.edit_text(f"❌ Errore grafico #{i+1}")
             price = get_current_price(symbol) or 0
-            caption = f"📊 {_esc(label)} — Live {i+1}/12 — ${price:.2f}"
+            caption = f"📊 {_esc(label)} — Diretta {i+1}/12 — ${price:.2f}"
             if photo_msg:
                 await photo_msg.delete()
             with open(chart, "rb") as f:
@@ -477,12 +478,12 @@ async def live(update, context):
             if i < 11:
                 await asyncio.sleep(10)
         except Exception as e:
-            await update.message.reply_text(f"❌ Live interrotto: {str(e)[:150]}")
+            await update.message.reply_text(f"❌ Diretta interrotta: {str(e)[:150]}")
             break
     _live_streams.pop(cid, None)
     if photo_msg:
         end = " fermato" if stopped else " terminato"
-        await photo_msg.edit_caption(caption=f"📊 {_esc(label)} — Live{end} ✅")
+        await photo_msg.edit_caption(caption=f"📊 {_esc(label)} — Diretta{end} ✅")
     await msg.delete()
 
 @authorized
@@ -607,7 +608,7 @@ async def analizza(update, context):
         tg = analysis["target"]
         acc = analysis["backtest_accuracy"]
         e = analysis["ensemble"]
-        emoji_sig = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}.get(sig, sig)
+        emoji_sig = {"BUY": "🟢 ACQUISTA", "SELL": "🔴 VENDI", "HOLD": "🟡 MANTIENI"}.get(sig, sig)
         lines = [
             f"📊 *{_esc(label)}* — ${ind['price']:.2f}",
             f"📉 Trend: `{_esc(spk)}` | RSI {ind['rsi']} | MACD {_esc(ind['macd_status'])}",
@@ -617,7 +618,7 @@ async def analizza(update, context):
             f"🎯 Target: ${tg:.2f} | 🛑 Stop: ${sl:.2f}",
             f"",
             f"🧩 Confluenza: 🟢{e['votes']['buy']}  🔴{e['votes']['sell']}  ⚪{e['votes']['neutral']} esperti",
-            f"📊 Accuratezza backtest: {acc}%" if acc else "",
+            f"📊 Accuratezza test storico: {acc}%" if acc else "",
         ]
         await status_msg.edit_text("\n".join(filter(None, lines)), parse_mode="Markdown")
         news = get_news_text(symbol)
@@ -630,6 +631,60 @@ async def analizza(update, context):
                 os.unlink(chart)
         final_msg = await update.message.reply_text(f"⏳ Consulto AI per verdetto finale...")
         advice = get_advice(label, symbol, analysis, news)
+        await final_msg.edit_text(f"🧠 Verdetto AI:\n{advice}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Errore analisi {label}: {str(e)[:200]}")
+
+@authorized
+async def facile_cmd(update, context):
+    if not context.args:
+        await update.message.reply_text("Usa: `/facile NVDA` o `/facile oro`", parse_mode="Markdown")
+        return
+    text = " ".join(context.args)
+    await update.message.reply_text(f"🔍 Cerco {_esc(text)}...")
+    try:
+        label, symbol = resolve_symbol(text)
+    except Exception:
+        await update.message.reply_text(f"❌ Asset '{text}' non trovato.")
+        return
+    status_msg = await update.message.reply_text(f"⏳ Analisi facile {label} in corso...")
+    try:
+        analysis, ind, spk = _get_analysis(symbol, label)
+        sig = analysis["signal"]
+        conf = analysis["confidence"]
+        sl = analysis["stop_loss"]
+        tg = analysis["target"]
+        emoji_sig = {"BUY": "🟢 ACQUISTA", "SELL": "🔴 VENDI", "HOLD": "🟡 MANTIENI"}.get(sig, sig)
+        adx_val = ind.get("adx", 0)
+        reason_map = {
+            "BUY": "Trend rialzista confermato da volume e indicatori. L'AI consiglia l'acquisto.",
+            "SELL": "Trend ribassista confermato da volume e indicatori. L'AI consiglia la vendita.",
+            "HOLD": "Segnali contrastanti tra gli indicatori. L'AI consiglia di attendere.",
+        }
+        reason = reason_map.get(sig, "")
+        adx_label = f"Mercato in tendenza (ADX {adx_val:.0f})" if adx_val > 25 else f"Mercato laterale (ADX {adx_val:.0f})"
+        lines = [
+            f"📊 *{_esc(label)}* — ${ind['price']:.2f}",
+            f"",
+            f"📈 Segnale: *{_esc(emoji_sig)}* (confidenza {conf}%)",
+            f"🎯 Obiettivo: ${tg:.2f}",
+            f"🛑 Stop loss: ${sl:.2f}",
+            f"",
+            f"🧠 *Perché:* {reason}",
+            f"📊 {adx_label}",
+            f"",
+            f"⚠️ Avvertenza: progetto educativo",
+        ]
+        await status_msg.edit_text("\n".join(lines), parse_mode="Markdown")
+        if CHART_ENABLED:
+            chart = create_live_chart(symbol, label)
+            if chart:
+                price = get_current_price(symbol) or ind['price']
+                with open(chart, "rb") as f:
+                    await update.message.reply_photo(f, caption=f"📈 {_esc(label)} — ${price:.2f}")
+                os.unlink(chart)
+        final_msg = await update.message.reply_text(f"⏳ Consulto AI per verdetto finale...")
+        advice = get_advice(label, symbol, analysis, get_news_text(symbol))
         await final_msg.edit_text(f"🧠 Verdetto AI:\n{advice}")
     except Exception as e:
         await update.message.reply_text(f"❌ Errore analisi {label}: {str(e)[:200]}")
@@ -668,9 +723,9 @@ async def stoplive(update, context):
     cid = update.effective_chat.id
     if cid in _live_streams:
         _live_streams[cid] = False
-        await update.message.reply_text("⏹️ Live stream fermato.")
+        await update.message.reply_text("⏹️ Diretta fermata.")
     else:
-        await update.message.reply_text("Nessun live attivo in questa chat.")
+        await update.message.reply_text("Nessuna diretta attiva in questa chat.")
 
 _nuke_armed = False
 
@@ -765,6 +820,7 @@ def start_bot():
     app.add_handler(CommandHandler("lista", lista))
     app.add_handler(CommandHandler("notizie", notizie_cmd))
     app.add_handler(CommandHandler("analizza", analizza))
+    app.add_handler(CommandHandler("facile", facile_cmd))
     app.add_handler(CommandHandler("chat", chat_cmd))
     app.add_handler(CommandHandler("stop", stop_cmd))
     app.add_handler(CommandHandler("esci", stop_cmd))

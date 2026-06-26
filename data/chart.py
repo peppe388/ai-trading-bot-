@@ -13,10 +13,10 @@ try:
 except:
     pass
 
-DARK_BG = '#131722'
-DARK_GRID = '#2a2e39'
-GREEN = '#26a69a'
-RED = '#ef5350'
+DARK_BG = '#0F141C'
+DARK_GRID = '#1E232A'
+GREEN = '#219D58'
+RED = '#D5414D'
 ORANGE = '#ffa726'
 BLUE = '#42a5f5'
 

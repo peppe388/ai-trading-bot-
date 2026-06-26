@@ -81,8 +81,8 @@ def format_backtest(result):
         f"Simbolo: {result['symbol']}",
         f"Rendimento: {result['total_return']:+.2f}%",
         f"Vittorie: {result['win_rate']}% ({result['num_trades']} operazioni)",
-        f"Max Drawdown: {result['max_drawdown']:.2f}%",
-        f"Sharpe Ratio: {result['sharpe_ratio']}",
+        f"Ribasso Massimo: {result['max_drawdown']:.2f}%",
+        f"Indice di Sharpe: {result['sharpe_ratio']}",
         f"Capitale finale: ${result['final_capital']:.2f}",
     ]
     return "\n".join(lines)

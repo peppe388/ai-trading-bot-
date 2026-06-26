@@ -35,7 +35,7 @@ def generate_chart(df, symbol_name, signal=None):
 
     if signal and signal in ["BUY", "SELL"]:
         color = "#00ff88" if signal == "BUY" else "#ff4444"
-        label = f"{signal} HERE"
+        label = "ACQUISTA QUI" if signal == "BUY" else "VENDI QUI"
         apds.append(mpf.make_addplot(
             [float(last_90["Close"].iloc[-1])] * len(last_90),
             color=color,
